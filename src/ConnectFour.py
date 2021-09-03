@@ -14,29 +14,33 @@ class ConnectFour:
   def game_over(self):
     if (self.last_col is None):
       print("last col is none")
-      return (False, 0)
     c = self.last_col
     r = self.level[c] + 1
     if (r <= 2 and (self.board[r:r+4, c]==-self.player).all()):
       return (True, -self.player)
-    for i in range(4):
-      c_min = c - 3 + i
-      c_max = c + i
-      if (c_min in range(self.cols) and c_max in range(self.cols)):
-        if ((self.board[r, c_min:c_max+1]==-self.player).all()):
-          return (True, -self.player)
-        r_min = r - 3 + i
-        r_max = r + i
-        if (r_min in range(self.rows) and r_max in range(self.rows)):
-          sub_board = self.board[r_min:r_max+1, c_min:c_max+1]
-          if ((np.diag(sub_board)==-self.player).all()):
-            return (True, -self.player)
-        r_min = r - i
-        r_max = r + 3 - i
-        if (r_min in range(self.rows) and r_max in range(self.rows)):
-          sub_board = self.board[r_min:r_max+1, c_min:c_max+1][::-1,:]
-          if ((np.diag(sub_board)==-self.player).all()):
-            return (True, -self.player)
+    dirs = {(-1, -1): 0,
+            ( 0, -1): 0,
+            (-1,  1): 0,
+            ( 1, -1): 0,
+            ( 0,  1): 0,
+            ( 1,  1): 0
+           }
+    for offset in range(1, 4):
+      for dir in dirs:
+        y = r + offset * dir[0]
+        x = c + offset * dir[1]
+        if (dirs[dir] == offset - 1
+            and 0 <= x < self.cols
+            and 0 <= y < self.rows
+            and self.board[y, x] == -self.player):
+          dirs[dir] = offset
+    dir_pairs = [((-1, -1), (1,  1)),
+                 (( 0, -1), (0,  1)),
+                 ((-1,  1), (1, -1)),
+                ]
+    for dir_pair in dir_pairs:
+      if (dirs[dir_pair[0]] + dirs[dir_pair[1]] + 1 >= 4):
+        return (True, -self.player)
     if ((self.level==-1).all()):
       return (True, 0)
     return (False, 0)
