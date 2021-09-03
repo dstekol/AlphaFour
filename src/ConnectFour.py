@@ -13,7 +13,7 @@ class ConnectFour:
 
   def game_over(self):
     if (self.last_col is None):
-      print("last col is none")
+      return (False, 0)
     c = self.last_col
     r = self.level[c] + 1
     if (r <= 2 and (self.board[r:r+4, c]==-self.player).all()):
