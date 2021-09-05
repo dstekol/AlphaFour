@@ -4,12 +4,16 @@ from src.ConnectFour import ConnectFour
 import math
 import numpy as np
 from tqdm import tqdm
+import copy
 
 class LeafScore:
   def __init__(self, winner, score, col):
     self.winner = winner
-    self.col = col
     self.score = score
+    self.col = col
+
+  def totuple(self):
+    return (self.winner, self.score, self.col)
   
 
 class AlphaBetaPlayer(ConnectFourPlayer):
@@ -29,22 +33,27 @@ class AlphaBetaPlayer(ConnectFourPlayer):
                                   low_threat_reward_bounds, 
                                   high_threat_reward_bounds, 
                                   stacked_threat_reward_bounds)
+    self.memos = {}
 
   def pick_move(self, game):
     if (not isinstance(game, ConnectFourWithThreats)):
       game = ConnectFourWithThreats(game)
     best_result_quick = self.quick_search(game)
-    if (best_result_quick is not None and False):
+    if (best_result_quick is not None):
         return best_result_quick.col
+    self.memos = {}
     best_result = self.search(game, depth=0, max_depth=self.max_depth)
+    print(round(best_result.score, 3))
     return best_result.col
     
   def quick_search(self, game):
     results = []
+    saved_last_col = game.last_col
+    saved_threats = copy.deepcopy(game.threats)
     for col in game.valid_cols():
-      hypo_game = game.copy()
-      hypo_game.perform_move(col)
-      result = self.search(hypo_game, depth=1, max_depth = self.quick_search_depth)
+      game.perform_move(col)
+      result = self.search(game, depth=1, max_depth=self.quick_search_depth)
+      self.reverse_last_move(game, saved_last_col, saved_threats)
       result.col = col
       results += [result]
     best_result_quick = self.select_best_result(results, game)
@@ -55,28 +64,45 @@ class AlphaBetaPlayer(ConnectFourPlayer):
         return best_result_quick
     return None
 
+  def reverse_last_move(self, game, saved_last_col, saved_threats):
+    if (game.last_col is None):
+      raise ValueError("No move to reverse")
+    game.level[game.last_col] += 1
+    game.board[game.level[game.last_col], game.last_col] = 0
+    game.player *= -1
+    game.last_col = saved_last_col
+    game.threats = saved_threats
+
 
   def search(self, game, depth, max_depth, alpha=-math.inf, beta=math.inf):
     # base case
+    board_hash = hash(bytes(game.board))
+    if (board_hash in self.memos):
+      return LeafScore(*self.memos[board_hash])
     is_over, winner = game.game_over()
     if (is_over):  # check if game over
-      return LeafScore(winner=winner, 
+      result = LeafScore(winner=winner, 
                        score=self.scorer.score(game, winner, depth), 
                        col=None)
+      self.memos[board_hash] = result.totuple()
+      return result
     
     if (depth == max_depth):  # check if max depth reached
-      return LeafScore(winner=winner, 
+      result = LeafScore(winner=winner, 
                        score=self.scorer.score(game, winner, depth), 
                        col=None)
-
+      self.memos[board_hash] = result.totuple()
+      return result
     valid_cols = game.valid_cols()
     self.reorder_cols(valid_cols, middle_col = game.cols // 2)
     results = []
     col_iter = tqdm(valid_cols) if depth == 0 else valid_cols
+    saved_last_col = game.last_col
+    saved_threats = copy.deepcopy(game.threats)
     for col in col_iter:
-      hypo_game = game.copy()
-      hypo_game.perform_move(col)
-      result = self.search(hypo_game, depth + 1, max_depth, alpha, beta)
+      game.perform_move(col)
+      result = self.search(game, depth + 1, max_depth, alpha, beta)
+      self.reverse_last_move(game, saved_last_col, saved_threats)
       result.col = col
       results += [result]
       if ((game.player == 1 and result.score > beta) 
@@ -87,8 +113,13 @@ class AlphaBetaPlayer(ConnectFourPlayer):
       else:
         beta = min(beta, result.score)
     best_result = self.select_best_result(results, game)
-    if (best_result is None):
+    if (depth == 0):
+      sorted_results = results[:]
+      sorted_results.sort(key=lambda result: result.col)
+      print([round(result.score, 3) for result in sorted_results])
+    if (best_result is None): #debug
         best_result = self.select_best_result(results, game)
+    self.memos[board_hash] = best_result.totuple()
     return best_result
 
   def reorder_cols(self, cols, middle_col):
@@ -144,7 +175,7 @@ class AlphaBetaScorer:
     self.stacked_threat_reward_bounds = stacked_threat_reward_bounds
 
   def score(self, game, winner, depth):
-    if (abs(self.base_score(game, winner)  * (self.discount_factor ** depth)) > 1):
+    if (abs(self.base_score(game, winner)  * (self.discount_factor ** depth)) > 1): #debug
       i = 1
     return self.base_score(game, winner)  * (self.discount_factor ** depth)
 
