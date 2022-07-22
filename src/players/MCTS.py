@@ -89,18 +89,6 @@ class MCTS:
     actions = list(range(game.cols))
     return node.get_exp_action_scores(actions, temperature=1e-5) # TODO
 
-  def resign(self, game):
-    def get_successor_state(action):
-      game_copy = game.copy()
-      game_copy.perform_move(action)
-      return extract_game_state_tuple(game_copy)
-    successor_states = [get_successor_state(action) for action in range(game.cols)]
-    get_q_value = lambda state: self.nodes[state].q_value()
-    successor_q_vals = map(get_q_value, successor_states)
-    max_successor_q_val = max(successor_q_vals)
-    current_q_val = self.nodes[extract_game_state_tuple(game)].q_value()
-    return current_q_val < self.resign_threshold and max_successor_q_val < resign_threshold
-
   def search(self, game, mcts_iters=None):
     if (mcts_iters is None):
       mcts_iters = self.mcts_iters
