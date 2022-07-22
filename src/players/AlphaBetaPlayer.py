@@ -34,6 +34,7 @@ class AlphaBetaPlayer(ConnectFourPlayer):
                                   high_threat_reward_bounds, 
                                   stacked_threat_reward_bounds)
     self.memos = {}
+    self.hits = 0
 
   def pick_move(self, game):
     if (not isinstance(game, ConnectFourWithThreats)):
@@ -42,22 +43,25 @@ class AlphaBetaPlayer(ConnectFourPlayer):
     if (best_result_quick is not None):
         return best_result_quick.col
     self.memos = {}
+    self.hits = 0
     best_result = self.search(game, depth=0, max_depth=self.max_depth)
     print(round(best_result.score, 3))
+    print(len(self.memos))
+    print(self.hits)
     return best_result.col
     
   def quick_search(self, game):
     results = []
     saved_last_col = game.last_col
     saved_threats = copy.deepcopy(game.threats)
-    for col in game.valid_cols():
+    for col in game.valid_moves():
       game.perform_move(col)
       result = self.search(game, depth=1, max_depth=self.quick_search_depth)
       self.reverse_last_move(game, saved_last_col, saved_threats)
       result.col = col
       results += [result]
     best_result_quick = self.select_best_result(results, game)
-    if (game.num_moves() <= 2
+    if (game.compute_num_moves() <= 2
         or self.max_depth <= self.quick_search_depth
         or best_result_quick.winner != 0
         or (len(results) > 1 and results[1].winner != 0)):
@@ -78,6 +82,7 @@ class AlphaBetaPlayer(ConnectFourPlayer):
     # base case
     board_hash = hash(bytes(game.board))
     if (board_hash in self.memos):
+      self.hits += 1
       return LeafScore(*self.memos[board_hash])
     is_over, winner = game.game_over()
     if (is_over):  # check if game over
@@ -93,13 +98,14 @@ class AlphaBetaPlayer(ConnectFourPlayer):
                        col=None)
       self.memos[board_hash] = result.totuple()
       return result
-    valid_cols = game.valid_cols()
+    valid_cols = game.valid_moves()
     self.reorder_cols(valid_cols, middle_col = game.cols // 2)
     results = []
     col_iter = tqdm(valid_cols) if depth == 0 else valid_cols
     saved_last_col = game.last_col
     saved_threats = copy.deepcopy(game.threats)
     for col in col_iter:
+      game_copy = game.copy()
       game.perform_move(col)
       result = self.search(game, depth + 1, max_depth, alpha, beta)
       self.reverse_last_move(game, saved_last_col, saved_threats)
