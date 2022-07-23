@@ -11,6 +11,15 @@ def positive_int(arg):
     argparse.ArgumentTypeError("Must be a positive integer")
   return i
 
+def nonnegative_int(arg):
+  try:
+    i = int(arg)
+    if (i < 0):
+      raise ValueError()
+  except ValueError:
+    argparse.ArgumentTypeError("Must be a positive integer")
+  return i
+
 def constrained_float(arg):
   try:
     f = float(arg)
@@ -26,4 +35,4 @@ def valid_checkpoint_dir(arg):
   return Path(arg)
 
 def valid_opponent(arg):
-  pass # TODO
+  return arg in ["Random", "AlphaBeta", "MCTS", "AlphaZero"]

@@ -8,7 +8,7 @@ class ConnectFour:
     self.rows = 6
     self.cols = 7
     self.last_col = None
-    self.board = np.zeros((self.rows, self.cols)) if board is None else board
+    self.board = np.zeros((self.rows, self.cols), dtype=int) if board is None else board
     self.level = np.full((self.cols), self.rows - 1) if board is None else self._compute_level()
     self.num_moves = self._compute_num_moves()
     self.player = 1 if self.num_moves % 2 == 0 else -1
