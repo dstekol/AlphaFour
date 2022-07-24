@@ -105,8 +105,7 @@ class MCTSNode:
   def sample_best_action(self, temperature, dirichlet_coeff, dirichlet_alpha):
     weights = self.get_exp_action_scores(self.actions, temperature)
     noise = np.random.dirichlet(alpha = [dirichlet_alpha] * len(weights))
-    weights += dirichlet_coeff * noise
-    weights = weights / weights.sum()
+    weights = (1 - dirichlet_coeff) * weights + dirichlet_coeff * noise
     return random.choices(self.actions, weights=weights, k=1)[0]
 
   def update_action_value(self, action, value):

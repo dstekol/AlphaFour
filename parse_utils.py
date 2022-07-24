@@ -8,6 +8,7 @@ def parse_args_trainer():
   parser.add_argument("--cuda", default=True, type=bool, help="Whether to use CUDA acceleration")
   parser.add_argument("--rounds", default=2, type=positive_int, help="Number of policy improvement rounds")
   parser.add_argument("--games-per-round", default=3, type=positive_int, help="Number of self-play games to execute per policy improvement round")
+  parser.add_argument("--validation-games", default=5, type=float, help="Number of self-play games to hold back for validation during neural network training. Can be integer (number of games), float between 0 and 1 (proportion of games played during round), or None (no validation games)")
   parser.add_argument("--eval-games", default=3, type=positive_int, help="Number of evaluation games to play between newly trained model and previous best model")
   parser.add_argument("--win-threshold", default=0.55, type=constrained_float, help="Fraction of evaluation games that newly trained model must win to replace previous best model")
   parser.add_argument("--checkpoint-dir", required=True, type=valid_checkpoint_dir, help="Directory for model checkpoints (if checkpoints already exist in this directory, the trainer will use them as a starting point)")
@@ -27,29 +28,33 @@ def parse_args_trainer():
   game_args.add_argument("--mcts-iters", default=100, type=positive_int, help="Number of PUCT simulations to execute for each move")
   game_args.add_argument("--explore_coeff", default=1, type=float, help="Exploration coefficient for MCTS/PUCT search")
   game_args.add_argument("--temperature", default=1, type=float, help="MCTS/PUCT exploration temperature")
+  game_args.add_argument("--dirichlet-coeff", default=0.25, type=float, help="Dirichlet noise coefficient (added to action scores)")
+  game_args.add_argument("--dirichlet-alpha", default=0.03, type=float, help="Dirichlet noise distribution parameter")
   game_args.add_argument("--temp-drop-step", default=15, type=nonnegative_int, help="The episode step at which to drop the temperature (exploration strength) to 0 during self-play training games")
   game_args.add_argument("--resign-threshold", default=-0.85, type=float, help="Threshold value below which agent will resign")
   game_args.add_argument("--resign-forbid-prob", default=0.1, type=constrained_float, help="Probability that resignation will not be allowed (used in training to prevent false positives)")
 
+  arg_groups = [train_args, game_args]
+  #return to_heirarchical_dict(parser.parse_args(), arg_groups)
   return {"seed": 42,
           "cuda": True,
-          "rounds": 2,
-          "games_per_round": 3,
-          "eval_games": 3,
+          "rounds": 20,
+          "games_per_round": 100,
+          "eval_games": 20,
           "win_threshold": 0.55,
           "checkpoint_dir": Path("checkpoints"),
           "flip_prob": 0.5,
           "samples_per_game": None,
           "train_args": {
-            "epochs_per_round": 2,
-            "batch_size": 10,
+            "epochs_per_round": 20,
+            "batch_size": 20,
             "policy_weight": 1,
             "value_weight": 1,
-            "lr": 3e-4,
+            "lr": 1e-3,
             "l2_reg": 1e-5
             },
           "game_args": {
-            "mcts_iters": 100,
+            "mcts_iters": 1000,
             "explore_coeff": 1,
             "temperature": 1,
             "temp_drop_step": 15,
@@ -57,7 +62,6 @@ def parse_args_trainer():
             "resign_forbid_prob": 0.1
             }
     }
-  #return parser.parse_args()
 
 def parse_args_single_player():
   parser = argparse.ArgumentParser()
@@ -68,3 +72,13 @@ def parse_args_single_player():
   alpha_beta_args.add_argument("--depth", type=positive_int, help="Max depth of alpha-beta search (only valid for AlphaBeta opponent).")
 
   return parser.parse_args()
+
+def _to_heirarchical_dict(args, arg_groups):
+  args_dict = vars(args)
+  for arg_group in arg_groups:
+    title = arg_group.__dict__["title"]
+    args_dict[title] = dict()
+    for a in arg_group.__dict__["_group_actions"]:
+      args_dict[title][a.dest] = args_dict[a.dest]
+      del args_dict[a.dest]
+  return args_dict

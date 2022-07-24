@@ -23,11 +23,11 @@ def eval_func(model, game, actions):
   return postprocess_tensor(action_vals), postprocess_tensor(state_vals)
 
 class AlphaZeroPlayer(ConnectFourPlayer):
-  def __init__(self, model, explore_coeff=1, mcts_iters = 1000, temperature=0):
+  def __init__(self, model, mcts_args):
     super().__init__()
     self.mcts_iters = mcts_iters
     self.model = model
-    self.mcts = MCTS(eval_func=lambda game, actions: eval_func(model, game, actions), mcts_iters=mcts_iters, explore_coeff=explore_coeff, temperature=temperature)
+    self.mcts = MCTS(eval_func=lambda game, actions: eval_func(model, game, actions), **mcts_args)
 
   def drop_temperature(self):
     self.mcts.update_temperature(0)
