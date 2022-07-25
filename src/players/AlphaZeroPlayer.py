@@ -12,20 +12,19 @@ import numpy as np
 #  return action_values, state_value
 
 def one_hot_state(game):
-  return np.eye(3)[game.board + 1]
+  return np.eye(3)[game.player * game.board + 1]
 
 def postprocess_tensor(t):
   return t.cpu().detach().squeeze().numpy()
 
 def eval_func(model, game, actions):
   x = torch.tensor(one_hot_state(game), dtype=torch.float32).unsqueeze(0).to(model.device)
-  action_vals, state_vals = model(x)
+  action_vals, state_vals = model(x, apply_softmax=True)
   return postprocess_tensor(action_vals), postprocess_tensor(state_vals)
 
 class AlphaZeroPlayer(ConnectFourPlayer):
   def __init__(self, model, mcts_args):
     super().__init__()
-    self.mcts_iters = mcts_iters
     self.model = model
     self.mcts = MCTS(eval_func=lambda game, actions: eval_func(model, game, actions), **mcts_args)
 
@@ -44,7 +43,7 @@ class AlphaZeroPlayer(ConnectFourPlayer):
     eval_states = self._get_successors(game)
     eval_states.append(game)
     x = torch.tensor(np.array([one_hot_state(s) for s in eval_states]), dtype=torch.float32).to(self.model.device)
-    action_vals, state_vals = self.model(x)
+    action_vals, state_vals = self.model(x, apply_softmax=True)
     action_vals = torch.tanh(action_vals)
     state_vals = postprocess_tensor(state_vals)
     return (state_vals < resign_threshold).all()
