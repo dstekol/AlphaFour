@@ -4,35 +4,36 @@ import copy
 from tqdm import tqdm
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
-from src.players.components.AlphaZeroNets import AlphaZeroFCN
 from src.players.AlphaZeroPlayer import AlphaZeroPlayer, one_hot_state
 from src.ConnectFour import ConnectFour
+from src.players.components.AlphaZeroNets import AlphaZeroFCN
 from src.players.components.AlphaZeroDataset import AlphaZeroDataset
 from src.players.components.checkpoint_utils import *
+from src.players.components.ResignCounter import ResignCounter
 from parse_utils import parse_args_trainer
 
-def init_players(target_model, opponent_model, game_args):
+def init_players(model_a, model_b, game_args):
   mcts_arg_names = ["explore_coeff", "mcts_iters", "temperature", "dirichlet_coeff", "dirichlet_alpha"]
-  mcts_args = {arg_name: game_args[arg_name] in mcts_arg_names}
-  target_player = AlphaZeroPlayer(target_model, mcts_args)
-  opponent_player = AlphaZeroPlayer(opponent_model, mcts_args)
-  return target_player, opponent_player
+  mcts_args = {arg_name: game_args[arg_name] for arg_name in mcts_arg_names}
+  player_a = AlphaZeroPlayer(model_a, mcts_args)
+  player_b = AlphaZeroPlayer(model_b, mcts_args)
+  return player_a, player_b
 
-def play_game(target_model, opponent_model, game_args, save_trajectory=True):
+def play_game(model_a, model_b, game_args, save_trajectories=(True, True), resign_counter=None):
   # initialize vars
   state_trajectory = []
   action_score_trajectory = []
   is_over = False
   resignations = [False, False]
   game = ConnectFour()
-  target_player, opponent_player = init_players(target_model, opponent_model, game_args)
+  player_a, player_b = init_players(model_a, model_b, game_args)
   
   # randomly decide first player
-  target_player_first = bool(random.getrandbits(1))
-  if (target_player_first):
-    current_player, next_player = target_player, opponent_player
+  player_a_first = bool(random.getrandbits(1))
+  if (player_a_first):
+    current_player, next_player = player_a, player_b
   else:
-    current_player, next_player = opponent_player, target_player
+    current_player, next_player = player_b, player_a
   
   while (not is_over):
     # set exploration temperature to 0 for later portion of game
@@ -43,13 +44,22 @@ def play_game(target_model, opponent_model, game_args, save_trajectory=True):
 
     # handle resignations
     if (current_player.should_resign(game, game_args["resign_threshold"])):
-      resignations[0 if current_player ==  target_player else 1] = True
-      if (random.random() > game_args["resign_forbid_prob"]):
-        outcome = -game.player
-        break
+      player_ind = 0 if current_player == player_a else 1
+      if (not resignations[player_ind]):
+        resignations[player_ind] = True
+        # randomly decide whether to allow resignation or force 
+        if (random.random() > game_args["resign_forbid_prob"]):
+          outcome = -game.player
+          if (resign_counter is not None):
+              resign_counter.inc_allowed_resigns()
+          break
+        else:
+          if (resign_counter is not None):
+            resign_counter.inc_disallowed_resigns()
     
     # save game trajectory for target player if requested
-    if (save_trajectory and current_player == target_player):
+    if ((save_trajectory[0] and current_player == player_a)
+        or (save_trajectory[1] and current_player == player_b)):
       state_trajectory.append(one_hot_state(game))
       action_scores = current_player.mcts.current_action_scores(game)
       action_score_trajectory.append(action_scores)
@@ -59,8 +69,14 @@ def play_game(target_model, opponent_model, game_args, save_trajectory=True):
     is_over, outcome = game.game_over()
     current_player, next_player = next_player, current_player
   
-  # check whether target player won (depending on who went first)
-  outcome = outcome * (1 if target_player_first else -1)
+  # compute whether player a won (since order may have been reversed)
+  outcome = outcome * (1 if player_a_first else -1)
+
+  # check for false resignations
+  winner_ind = 0 if outcome == 1 else 1
+  if (resign_counter is not None and resignations[winner_ind]):
+    resign_counter.inc_false_resigns()
+
   return outcome, state_trajectory, action_score_trajectory, resignations
 
 def eval_new_model(target_model, opponent_model, game_args, num_eval_games, win_threshold):
@@ -69,10 +85,12 @@ def eval_new_model(target_model, opponent_model, game_args, num_eval_games, win_
   game_args["temp_drop_step"] = 0
   game_args["dirichlet_coeff"] = 0
   for i in tqdm(range(num_eval_games), desc="eval games", leave=True, position=0):
-    outcome, _, _, _ = play_game(target_model, opponent_model, game_args, save_trajectory=False)
+    outcome, _, _, _ = play_game(target_model, opponent_model, game_args, save_trajectory=(False, False), resign_counter=None)
     if (outcome == 1):
       win_counter += 1
-  return float(win_counter) / float(num_eval_games) >= win_threshold
+  frac_wins = float(win_counter) / float(num_eval_games)
+  print(f"\nTarget model won {frac_wins} of eval games")
+  return frac_wins >= win_threshold
 
 def train_model(model, train_data, val_data, train_args, device):
   train_loader = DataLoader(train_data, shuffle=True, batch_size=train_args["batch_size"])
@@ -92,12 +110,14 @@ def preprocess_game_data(game_trajectories, samples_per_game, flip_prob, validat
     validation_games = 0
   elif (validation_games < 1):
     validation_games = int(len(game_trajectories) * validation_games)
-  else: 
+  else:
     validation_games = min(len(game_trajectories), validation_games)
-  train_trajectories = game_trajectories[data_inds[:validation_games]]
-  val_trajectories = game_trajectories[data_inds[validation_games:]]
-  train_data = AlphaZeroDataset(train_trajectories, args["samples_per_game"], args["flip_prob"])
-  val_data = AlphaZeroDataset(val_trajectories, args["samples_per_game"], args["flip_prob"])
+  train_inds = data_inds[:validation_games]
+  val_inds = data_inds[validation_games:]
+  train_trajectories = [game_trajectories[i] for i in train_inds] 
+  val_trajectories = [game_trajectories[i] for i in val_inds] 
+  train_data = AlphaZeroDataset(train_trajectories, samples_per_game, flip_prob)
+  val_data = AlphaZeroDataset(val_trajectories, samples_per_game, flip_prob)
   return train_data, val_data
 
 
@@ -111,8 +131,7 @@ def train(args):
     latest_checkpoint_model = AlphaZeroFCN(**args["train_args"])
 
   for round_ind in tqdm(range(args["rounds"]), desc="rounds", leave=True, position=0):
-    wrong_resigns = 0
-    total_resigns = 0
+    resign_counter = ResignCounter()
 
     # initialize training model to current best model
     target_model = copy.deepcopy(latest_checkpoint_model).to(device)
@@ -130,21 +149,10 @@ def train(args):
     game_trajectories = []
     for game_ind in tqdm(range(args["games_per_round"]), desc="training games", leave=True, position=0):
       outcome, state_trajectory, action_score_trajectory, resignations = \
-        play_game(latest_checkpoint_model, opponent_model, args["game_args"])
+        play_game(latest_checkpoint_model, opponent_model, args["game_args"], save_trajectories=(True, True), resign_counter)
       game_trajectories.append((outcome, state_trajectory, action_score_trajectory))
 
-      # update resignation stats
-      if (resignations[0]):
-        total_resigns += 1
-        if (outcome != -1):
-          wrong_resigns += 1
-    
-    # print resignation stats
-    resign_frac = float(total_resigns) / float(args["games_per_round"])
-    print(f"\nResignation proportion: {resign_frac}")
-    if (wrong_resigns > 0):
-      wrong_resign_frac = float(wrong_resigns) / float(total_resigns)
-      print(f"\nFalse resignation proportion: {wrong_resign_frac}")
+    resign_counter.print_stats()
 
     # train policy and value networks to predict action and state scores respectively
     train_data, val_data = preprocess_game_data(game_trajectories, args["samples_per_game"], args["flip_prob"], args["validation_games"])
