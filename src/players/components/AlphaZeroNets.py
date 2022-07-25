@@ -12,13 +12,17 @@ class AlphaZeroFCN(pl.LightningModule):
     self.fc2 = nn.Linear(100, 50)
     self.fc_policy = nn.Linear(50, 7)
     self.fc_value = nn.Linear(50, 1)
+    self.policy_criterion = torch.nn.CrossEntropyLoss()
+    self.value_criterion = torch.nn.MSELoss()
 
-  def forward(self, x):
+  def forward(self, x, apply_softmax=False):
     x = x.reshape(-1, 7*6*3)
     out = F.relu(self.fc1(x))
-    #out = F.relu(self.fc2(out))
     out = F.relu(self.fc2(out))
+    #out = F.relu(self.fc3(out))
     action_vals = self.fc_policy(out)
+    if (apply_softmax):
+      action_vals = F.softmax(action_vals, dim=1)
     state_val = torch.tanh(self.fc_value(out))
     return action_vals, state_val
 
@@ -31,8 +35,8 @@ class AlphaZeroFCN(pl.LightningModule):
     norm_action_vals = norm_vals[:, :-1]
     norm_state_vals = norm_vals[:, -1].unsqueeze(1)
     pred_action_vals, pred_state_vals = self(board)
-    policy_loss = F.binary_cross_entropy_with_logits(pred_action_vals, norm_action_vals)
-    value_loss = F.mse_loss(pred_state_vals, norm_state_vals)
+    policy_loss = self.policy_criterion(pred_action_vals, norm_action_vals)
+    value_loss = self.value_criterion(pred_state_vals, norm_state_vals)
     loss = self.hparams.policy_weight * policy_loss + self.hparams.value_weight * value_loss
     self.log("train/loss", loss)
     self.log("train/policy_loss", policy_loss)
