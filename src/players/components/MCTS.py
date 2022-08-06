@@ -8,50 +8,57 @@ def hashable_game_state(game):
 class MCTS:
   def __init__(self, eval_func, 
                      mcts_iters, 
-                     explore_coeff=1, 
-                     temperature=0, 
-                     dirichlet_coeff=0, 
-                     dirichlet_alpha=0.03):
+                     discount,
+                     explore_coeff, 
+                     temperature, 
+                     dirichlet_coeff, 
+                     dirichlet_alpha):
     self.nodes = dict()
     self.explore_coeff = explore_coeff
     self.eval_func = eval_func
     self.temperature = temperature
     self.dirichlet_coeff = dirichlet_coeff
     self.dirichlet_alpha = dirichlet_alpha
+    self.discount = discount
     self.mcts_iters = mcts_iters
 
   def update_temperature(self, temperature):
     self.temperature = temperature
 
-  def current_action_scores(self, game):
+  def current_action_scores(self, game, temperature=None):
+    if (temperature is None):
+      temperature = self.temperature
     node = self.nodes[hashable_game_state(game)]
     actions = list(range(game.cols))
-    return node.get_exp_action_scores(actions, self.temperature)
+    return node.action_scores(actions, temperature)
 
-  def search(self, game, mcts_iters=None):
-    if (mcts_iters is None):
-      mcts_iters = self.mcts_iters
+  def search(self, game):
     orig_game = game
-    for i in range(mcts_iters):
+    for i in range(self.mcts_iters):
       game = orig_game.copy()
       is_over = False
       trajectory = []
       while(not is_over):
         state = hashable_game_state(game)
         if (state not in self.nodes):
+          is_over, outcome = game.game_over()
+          if (is_over):
+            break
           actions = game.valid_moves()
           priors, outcome = self.eval_func(game, actions)
           node = MCTSNode(actions, priors, self.explore_coeff, game.cols)
           self.nodes[state] = node
           if (outcome is not None):
             break
-        node = self.nodes[state]
-        action = node.get_max_uct_action()
+        else:
+          node = self.nodes[state]
+        action = node.max_uct_action()
         trajectory.append((state, action))
         game.perform_move(action)
-        is_over, outcome = game.game_over()
-      for i, (state, action) in enumerate(trajectory):
-        signed_outcome = outcome * orig_game.player * (-1 if i % 2 == 1 else 1)
+      for j, (state, action) in enumerate(trajectory):
+        signed_outcome = outcome * orig_game.player * (-1 if j % 2 == 1 else 1)
+        moves_until_end = len(trajectory) - j - 1
+        discounted_outcome = signed_outcome * (self.discount ** moves_until_end)
         self.nodes[state].update_action_value(action, signed_outcome)
     orig_state = hashable_game_state(orig_game)
     current_node = self.nodes[orig_state]
@@ -76,7 +83,7 @@ class MCTSNode:
     conf_bound = math.sqrt(self.total_count) / (1 + self.action_count[action])
     return self.q_value(action) + self.explore_coeff * conf_bound
 
-  def get_max_uct_action(self):
+  def max_uct_action(self):
     max_action_uct = -math.inf
     max_actions = []
     for action in self.actions:
@@ -91,7 +98,7 @@ class MCTSNode:
     else:
       return random.choice(max_actions)
 
-  def get_exp_action_scores(self, actions, temperature):
+  def action_scores(self, actions, temperature):
     if (temperature == 0):
       max_count = self.action_count.max()
       weights = (self.action_count == max_count)[actions]
@@ -103,7 +110,7 @@ class MCTSNode:
     return weights
 
   def sample_best_action(self, temperature, dirichlet_coeff, dirichlet_alpha):
-    weights = self.get_exp_action_scores(self.actions, temperature)
+    weights = self.action_scores(self.actions, temperature)
     noise = np.random.dirichlet(alpha = [dirichlet_alpha] * len(weights))
     weights = (1 - dirichlet_coeff) * weights + dirichlet_coeff * noise
     return random.choices(self.actions, weights=weights, k=1)[0]

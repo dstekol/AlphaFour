@@ -1,5 +1,4 @@
 import numpy as np
-from IPython.display import clear_output
 import copy
 import torch
 
@@ -73,7 +72,6 @@ class ConnectFour:
     return [col for col in range(self.cols) if self.level[col] >= 0]
 
   def print_board(self):
-    clear_output()
     print("  1   2   3   4   5   6   7\n")
     print("+---"*7 + "+")
     for i, row in enumerate(self.board):

@@ -1,26 +1,26 @@
 from src.players.ConnectFourPlayer import ConnectFourPlayer
-from src.players.components.AlphaZeroNets import AlphaZeroFCN
 from src.players.components.MCTS import MCTS
 import torch
 import torch.nn.functional as F
 import numpy as np
 
-#def eval_func_template(model, game, actions):
-#  action_values, state_value = model([game.board])
-#  action_values = action_values.squeeze()[actions].numpy()
-#  state_value = state_value.item()
-#  return action_values, state_value
-
 def one_hot_state(game):
-  return np.eye(3)[game.player * game.board + 1]
+  perspective_board = game.player * game.board
+  player_ind_board = perspective_board + 1
+  one_hot_board = np.eye(3)[player_ind_board]
+  transposed_board = np.transpose(one_hot_board, axes=[2, 0, 1])
+  return transposed_board
 
 def postprocess_tensor(t):
   return t.cpu().detach().squeeze().numpy()
 
 def eval_func(model, game, actions):
-  x = torch.tensor(one_hot_state(game), dtype=torch.float32).unsqueeze(0).to(model.device)
-  action_vals, state_vals = model(x, apply_softmax=True)
-  return postprocess_tensor(action_vals), postprocess_tensor(state_vals)
+  with torch.no_grad():
+    x = torch.tensor(one_hot_state(game), dtype=torch.float32).unsqueeze(0).to(model.device)
+    action_vals, state_vals = model(x, apply_softmax=True)
+    action_vals = postprocess_tensor(action_vals)
+    state_vals = postprocess_tensor(state_vals) * game.player # fixed
+    return action_vals, state_vals
 
 class AlphaZeroPlayer(ConnectFourPlayer):
   def __init__(self, model, mcts_args):
@@ -40,13 +40,14 @@ class AlphaZeroPlayer(ConnectFourPlayer):
     return successors
 
   def should_resign(self, game, resign_threshold):
-    eval_states = self._get_successors(game)
-    eval_states.append(game)
-    x = torch.tensor(np.array([one_hot_state(s) for s in eval_states]), dtype=torch.float32).to(self.model.device)
-    action_vals, state_vals = self.model(x, apply_softmax=True)
-    action_vals = torch.tanh(action_vals)
-    state_vals = postprocess_tensor(state_vals)
-    return (state_vals < resign_threshold).all()
+    with torch.no_grad():
+      eval_states = self._get_successors(game)
+      eval_states.append(game)
+      x = torch.tensor(np.array([one_hot_state(s) for s in eval_states]), dtype=torch.float32).to(self.model.device)
+      action_vals, state_vals = self.model(x)
+      state_vals = postprocess_tensor(state_vals)
+      state_vals[:-1] *= -1
+      return (state_vals < resign_threshold).all()
 
   def pick_move(self, game):
     return self.mcts.search(game)

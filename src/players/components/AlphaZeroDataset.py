@@ -1,38 +1,28 @@
 from torch.utils.data import Dataset
-from torchvision.transforms import RandomHorizontalFlip
 import torch
 import random
 
 class AlphaZeroDataset(Dataset):
-    def __init__(self, game_trajectories, samples_per_game, flip_prob=0.5):
+    def __init__(self, game_trajectories, samples_per_game=None, flip_prob=0.5):
       self.data = []
       self.flip_prob = flip_prob
-      if (samples_per_game is not None and (not 0 < samples_per_game < 1) and samples_per_game != int(samples_per_game)):
-        raise ValueError("samples_per_game must be None, positive integer, or fraction in range (0, 1)")
-      for game_trajectory in game_trajectories:
-        self.data.extend(self._process_trajectory(game_trajectory, samples_per_game))
+      for trajectory in game_trajectories:
+        num_samples = self._num_samples(samples_per_game, trajectory)
+        trajectory_samples = random.choices(trajectory, k=min(len(trajectory), num_samples))
+        self.data.extend(trajectory_samples)
 
-    def _process_trajectory(self, game_trajectory, samples_per_game):
-      outcome, game_state_trajectory, action_score_trajectory = game_trajectory
-      outcome = torch.tensor([outcome], dtype=torch.float32)
-      game_data = []
-      for i in range(len(game_state_trajectory)):
-        x = torch.tensor(game_state_trajectory[i], dtype=torch.float32).permute(2, 0, 1)
-        y = torch.tensor(action_score_trajectory[i], dtype=torch.float32)
-        y = torch.cat((y, outcome), dim=0)
-        game_data.append((x,y))
+    def _num_samples(self, samples_per_game, trajectory):
       if (samples_per_game is None):
-        return game_data
-      elif (samples_per_game < 1):
-        num_samples = int(len(game_data) * samples_per_game)
-        return random.sample(game_data, num_samples)
+        return len(trajectory)
+      elif (0 <= samples_per_game < 1):
+        return int(len(trajectory) * samples_per_game)
       else:
-        return random.sample(game_data, min(int(samples_per_game), len(game_data)))
-
+        return int(samples_per_game)
+    
     def _random_flip(self, item):
       if (random.random() < self.flip_prob):
-        x = torch.flip(item[0], [1])
-        y = item[1]
+        x = torch.flip(item[0], [2])
+        y = item[1].clone()
         y[:-1] = torch.flip(y[:-1], [0])
         return (x, y)
       else:

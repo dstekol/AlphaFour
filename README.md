@@ -1,16 +1,20 @@
-# Connect Four Agents
+# Connect Four Agents (AlphaFour)
 This repository contains a variety of agents capable of playing Connect Four, 
 with skill levels ranging from trivial to extremely formidable. The available agents, 
 in order of prowess (and approximate implementation complexity), are:
 **RandomAgent** (moves randomly), **AlphaBetaAgent** (performs depth-limited tree search), 
 **MCTSAgent** (performs full-depth Monte-Carlo simulations), and, most importantly, **AlphaZeroAgent** 
-(based on the **AlphaZero** reinforcement learning algorithm from DeepMind).
-
+(based on the **AlphaZero** reinforcement learning algorithm from DeepMind). 
+The AlphaZero implementation includes nearly all of the features described in the paper, 
+such as virtual loss, "multithreaded" (in as much as Python allows) MCTS simulations with GPU buffering, in-episode exploration temperature variation, dirichlet noise, 
+false resignation monitoring, L2 network regularization, symmetry-based data augmentation, etc. 
+Some minor departures have been made due to convenience and resource limitations, 
+with the main caveat being that the agent is not designed to be trained across multiple machines.
 
 The project exists mainly for the sake of exploring and comparing various gameplay strategies in a context 
-which is reasonably (but not overwhelmingly) complex - however, there is also something to be said for the 
+which is reasonably, but not overwhelmingly, complex - however, there is also something to be said for the 
 pleasure of playing against an algorithm that you actually understand.
-Therefore, one could argue that this code sits squarely at the intersection of research and revelry. 
+One could argue that this code sits squarely at the intersection of research and revelry. 
 Feel free to use it for either or both.
 
 ## The Game Implementation
@@ -59,6 +63,7 @@ The MCTS search algorithm also forms the basis for the AlphaZero agent described
 
 ### AlphaZeroAgent
 This agent is a from-scratch implementation (modulo PyTorch/PyTorch Lightning) of the AlphaZero reinforcement learning algorithm.
+(with the main caveat being that it is not designed to be trained or run across multiple computers).
 
 
 Each round of the training process consists of a fixed number of self-play games against a 
@@ -95,23 +100,67 @@ For convencience, the repository includes a precomputed starter move tree for th
 
 ### Two Player Game
 To simply play a game against another human, users can run `run_two_player.py` script (no command line arguments are needed).
-Why anyone would want to use the command line interface instead of a physical board (or at least a GUI) is question mere mortals most likely cannot answer, 
-but the functionality is there for those who want it.
+Each move is specified by typing in a number from 1 to 7, corresponding to the column.
+Why anyone would want to use the command line interface for a two-player game instead of a physical board (or at least a GUI) 
+is question mere mortals most likely cannot answer, but the functionality is there for those who want it.
 
 ### One Player Game
 To play a 
 
 - --agent
 
-RandomAgent arguments
+#### RandomAgent arguments
 --gaussian (default = True)
 
-AlphaBeta arguments
+#### AlphaBeta arguments
+
+#### MCTS arguments
+
+#### AlphaZero arguments
 
 
-### Pitting Agents Against One Another
+### Pitting Agents Against One Another (Zero Player Game?)
 
 
 ### Train AlphaZero
+
+--checkpoint-dir - Directory for model checkpoints (if checkpoints already exist in this directory, the trainer will use them as a starting point)
+--seed - Random seed for reproducibility
+--cuda - Whether to use CUDA acceleration
+--rounds - Number of policy improvement rounds
+--games-per-round - Number of self-play games to execute per policy improvement round
+--validation-games - Number of self-play games to hold back for validation during neural network training.
+--eval-games - Number of evaluation games to play between newly trained model and previous best model
+--win-threshold - Fraction of evaluation games that newly trained model must win to replace previous best model
+--flip-prob - Probability that input is flipped while training neural network (for data augmentation)
+--epochs-per-round - How many backpropagation epochs to train model on data collected from each round
+
+
+## Entertaining/Evil/Frustrating Mistakes Made & Bugs Encountered
+ - The MCTS game outcome at the end of each simulation was originally negated, meaning the algorithm initially 
+ strove to do everything possible to lose (and tended to achieve this goal). 
+ On the bright-side, flipping the negative sign immediately resulted in much better play, 
+ making it easily the single most low-effort/high-return fix of the project.
+
+ - The neural network policy scores were being softmaxed during backpropagation training but not during gameplay,
+ meaning the network was not outputting the distributions it was trained to during actual games. 
+ Gameplay was bad, but not noticeably enough to immediately make the error obvious.
+
+ - The state representation being passed into the network initially did not include whose turn it was, 
+ meaning the network had to guess the outcome of the game without knowing which player was about to move.
+ Though it is sometimes (but not always!) possible to deduce the current player based on the piece counts, 
+ that is hardly a neural-net-friendly setup (learning to count is a whole 'nother problem), 
+ and it predictably resulted in miserable performance.
+
+ - A literal bug was encountered on the computer screen. Firm but cautious shoo-ing ensued.
+
+ - In attempt to apply data augmentation, the board was being flipped upside-down instead of side to side.
+ Connect Four is very much not invariant to vertical flipping.
+
+ - The value predictions were being needlessly normalized to be between 0 and 1 during training 
+ (and not denormalized during inference), causing the output of the network to only predict positive values 
+ even for disadvantageous positions.
+
+
 
 ## References

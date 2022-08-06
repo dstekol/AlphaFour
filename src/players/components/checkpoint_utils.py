@@ -3,7 +3,7 @@ import numpy as np
 import random
 import os
 import re
-from src.players.components.AlphaZeroNets import AlphaZeroFCN
+from src.players.components.AlphaZeroNets import AlphaZeroFCN, AlphaZeroCNN
 
 def get_ordered_checkpoints(checkpoint_dir):
   checkpoint_pattern = re.compile("[0-9]+\.ckpt")
@@ -29,7 +29,7 @@ def get_latest_model(checkpoint_dir):
   checkpoint_path = checkpoint_dir / ordered_checkpoints[-1]
   return AlphaZeroFCN.load_from_checkpoint(checkpoint_path)
 
-def save_model(checkpoint_dir, trainer):
+def save_model(checkpoint_dir, save_checkpoint_handle):
   ordered_checkpoints = get_ordered_checkpoints(checkpoint_dir)
   if (len(ordered_checkpoints)==0):
     max_checkpoint_num = -1
@@ -37,4 +37,4 @@ def save_model(checkpoint_dir, trainer):
     max_checkpoint_num = int(ordered_checkpoints[-1].rstrip(".ckpt"))
   new_filename = str(max_checkpoint_num + 1) + ".ckpt"
   checkpoint_path = checkpoint_dir / new_filename
-  trainer.save_checkpoint(checkpoint_path)
+  save_checkpoint_handle(checkpoint_path)

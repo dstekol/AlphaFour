@@ -8,24 +8,26 @@ def parse_args_trainer():
   parser.add_argument("--cuda", default=True, type=bool, help="Whether to use CUDA acceleration")
   parser.add_argument("--rounds", default=2, type=positive_int, help="Number of policy improvement rounds")
   parser.add_argument("--games-per-round", default=3, type=positive_int, help="Number of self-play games to execute per policy improvement round")
-  parser.add_argument("--validation-games", default=5, type=float, help="Number of self-play games to hold back for validation during neural network training. Can be integer (number of games), float between 0 and 1 (proportion of games played during round), or None (no validation games)")
+  parser.add_argument("--validation-games", default=0.05, type=float, help="Number of self-play games to hold back for validation during neural network training.")
   parser.add_argument("--eval-games", default=3, type=positive_int, help="Number of evaluation games to play between newly trained model and previous best model")
   parser.add_argument("--win-threshold", default=0.55, type=constrained_float, help="Fraction of evaluation games that newly trained model must win to replace previous best model")
   parser.add_argument("--checkpoint-dir", required=True, type=valid_checkpoint_dir, help="Directory for model checkpoints (if checkpoints already exist in this directory, the trainer will use them as a starting point)")
   parser.add_argument("--flip-prob", default=0.5, type=constrained_float, help="Probability that input is flipped while training neural network (for data augmentation)")
-  parser.add_argument("--samples-per-game", default=None, type=float, help="Number of samples from each self-play game to train neural network on. Can be integer (number of samples), float between 0 and 1 (proportion of game state samples), or None (all samples).")
+  parser.add_argument("--max-queue-len", default=300, type=positive_int, help="Maximum number of self-play games to retain in the training queue")
 
   train_args = parser.add_argument_group("train_args")
-  train_args.add_argument("--epochs-per-round", default=1, type=positive_int, help="How many epochs to train model on data collected from each round")
+  train_args.add_argument("--epochs-per-round", default=1, type=positive_int, help="How many backpropagation epochs to train model on data collected from each round")
   train_args.add_argument("--batch-size", default=10, type=positive_int, help="Batch size for training neural network")
-  train_args.add_argument("--policy-weight", default=1, type=positive_int, help="Batch size for training neural network")
-  train_args.add_argument("--value-weight", default=1, type=positive_int, help="Batch size for training neural network")
+  train_args.add_argument("--value-weight", default=0.5, type=float, help="Weight to put on value prediction relative to policy prediction (1 means all weight on value, 0 means all weight on policy)")
   train_args.add_argument("--lr", default=3e-4, type=float, help="Learning rate for training neural network")
   train_args.add_argument("--l2-reg", default=1e-5, type=float, help="Strength of L2 regularization for neural network")
-
+  train_args.add_argument("--log-dir", default=".", type=str, help="Logging directory for tensorboard logs")
+  train_args.add_argument("--patience", default=7, type=positive_int, help="Number of non-improving steps to wait before stopping training")
+  train_args.add_argument("--train-attempts", default=7, type=positive_int, help="Number of training runs to perform at each iteration (best model is selected based on validation loss)")
 
   game_args = parser.add_argument_group("game_args")
   game_args.add_argument("--mcts-iters", default=100, type=positive_int, help="Number of PUCT simulations to execute for each move")
+  game_args.add_argument("--discount", default=0.96, type=float, help="Per-step discount factor for rewards (to encourage winning quickly)")
   game_args.add_argument("--explore_coeff", default=1, type=float, help="Exploration coefficient for MCTS/PUCT search")
   game_args.add_argument("--temperature", default=1, type=float, help="MCTS/PUCT exploration temperature")
   game_args.add_argument("--dirichlet-coeff", default=0.25, type=float, help="Dirichlet noise coefficient (added to action scores)")
@@ -38,28 +40,35 @@ def parse_args_trainer():
   #return to_heirarchical_dict(parser.parse_args(), arg_groups)
   return {"seed": 42,
           "cuda": True,
-          "rounds": 20,
-          "games_per_round": 100,
+          "rounds": 30,
+          "games_per_round": 1500,
           "eval_games": 20,
           "win_threshold": 0.55,
-          "checkpoint_dir": Path("checkpoints"),
+          "checkpoint_dir": Path("checkpoints_v3"),
           "flip_prob": 0.5,
-          "samples_per_game": None,
+          "samples_per_game": 5,
+          "validation_games": 0.10,
+          "max_queue_len": 4500,
           "train_args": {
-            "epochs_per_round": 20,
+            "patience": 7,
+            "train_attempts": 6,
+            "log_dir": "alphazero_logs_v3",
+            "epochs_per_round": 5,
             "batch_size": 20,
-            "policy_weight": 1,
-            "value_weight": 1,
+            "value_weight": 0.5,
             "lr": 1e-3,
-            "l2_reg": 1e-5
+            "l2_reg": 1e-3
             },
           "game_args": {
-            "mcts_iters": 1000,
+            "discount": 0.96,
+            "mcts_iters": 400,
             "explore_coeff": 1,
             "temperature": 1,
-            "temp_drop_step": 15,
+            "temp_drop_step": 5,
             "resign_threshold": -0.85,
-            "resign_forbid_prob": 0.1
+            "resign_forbid_prob": 0.1,
+            "dirichlet_coeff": 0.25,
+            "dirichlet_alpha": 0.03
             }
     }
 
