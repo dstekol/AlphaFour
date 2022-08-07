@@ -9,7 +9,7 @@ import math
 def init_model(train_args, device, source_model=None):
   net_arg_names = ["lr", "l2_reg", "value_weight"]
   net_args = {arg_name: train_args[arg_name] for arg_name in net_arg_names}
-  model = AlphaZeroFCN(**net_args)
+  model = AlphaZeroCNN(**net_args)
   if (source_model is not None):
     model.load_state_dict(source_model.state_dict())
   return model.to(device)
@@ -17,8 +17,13 @@ def init_model(train_args, device, source_model=None):
 def train_model_attempt(model, train_loader, val_loader, round_ind, train_args, device):
   name = "round_" + str(round_ind)
   tb_logger = TensorBoardLogger(save_dir=train_args["log_dir"], name=name, default_hp_metric=False)
-  early_stop_callback = EarlyStopping(monitor="val/loss", mode="min", patience=train_args["patience"])
-  trainer = Trainer(max_epochs=train_args["epochs_per_round"], 
+  if (train_args["patience"] is not None):
+    early_stop_callback = EarlyStopping(monitor="val/loss", mode="min", patience=train_args["patience"])
+    callbacks = [early_stop_callback]
+  else:
+    callbacks = []
+  trainer = Trainer(max_epochs=train_args["max_epochs"], 
+                       min_epochs=train_args["min_epochs"],
                        enable_checkpointing=False,
                        accelerator=("cpu" if device=="cpu" else "gpu"), 
                        devices=1,
@@ -29,7 +34,7 @@ def train_model_attempt(model, train_loader, val_loader, round_ind, train_args, 
                        #track_grad_norm=2,
                        #auto_lr_find=True,
                        enable_model_summary = False,
-                       callbacks=[early_stop_callback]
+                       callbacks=callbacks
                        )
   #trainer.tune(model, train_loader)
   trainer.fit(model, train_loader, val_loader)

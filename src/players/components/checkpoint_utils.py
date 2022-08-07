@@ -3,6 +3,7 @@ import numpy as np
 import random
 import os
 import re
+import pickle as pkl
 from src.players.components.AlphaZeroNets import AlphaZeroFCN, AlphaZeroCNN
 
 def get_ordered_checkpoints(checkpoint_dir):
@@ -20,14 +21,14 @@ def get_random_opponent(checkpoint_dir):
     ordered_checkpoints = ordered_checkpoints[:-1]
   checkpoint = random.choice(ordered_checkpoints)
   checkpoint_path = checkpoint_dir / checkpoint
-  return AlphaZeroFCN.load_from_checkpoint(checkpoint_path), checkpoint
+  return AlphaZeroCNN.load_from_checkpoint(checkpoint_path), checkpoint
 
 def get_latest_model(checkpoint_dir):
   ordered_checkpoints = get_ordered_checkpoints(checkpoint_dir)
   if (len(ordered_checkpoints) == 0):
     return None
   checkpoint_path = checkpoint_dir / ordered_checkpoints[-1]
-  return AlphaZeroFCN.load_from_checkpoint(checkpoint_path)
+  return AlphaZeroCNN.load_from_checkpoint(checkpoint_path)
 
 def save_model(checkpoint_dir, save_checkpoint_handle):
   ordered_checkpoints = get_ordered_checkpoints(checkpoint_dir)
@@ -38,3 +39,9 @@ def save_model(checkpoint_dir, save_checkpoint_handle):
   new_filename = str(max_checkpoint_num + 1) + ".ckpt"
   checkpoint_path = checkpoint_dir / new_filename
   save_checkpoint_handle(checkpoint_path)
+
+def load_game_trajectories(games_file):
+  if (not os.path.isfile(games_file)):
+    return []
+  else:
+    return pkl.load(open(games_file, "rb"))

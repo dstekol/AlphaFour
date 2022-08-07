@@ -65,19 +65,18 @@ class AlphaZeroFCN(LightningModule):
 
 
 class AlphaZeroCNN(LightningModule):
-  def __init__(self, lr, l2_reg, value_weight, width, drop):
+  def __init__(self, lr, l2_reg, value_weight):
     super().__init__()
-    self.width = width
     self.save_hyperparameters("lr", "l2_reg", "value_weight")
-    self.conv1 = nn.Conv2d(3, width, kernel_size=4, padding="same")
-    self.drop1 = nn.Dropout(p = drop)
-    self.conv2 = nn.Conv2d(width, width, kernel_size=4, padding="same")
-    self.drop2 = nn.Dropout(p = drop)
-    self.conv3 = nn.Conv2d(width, width, kernel_size=4, padding="same")
-    self.drop3 = nn.Dropout(p = drop)
-    self.conv4 = nn.Conv2d(width, width, kernel_size=4, padding="same")
-    self.drop4 = nn.Dropout(p = drop)
-    self.fc1 = nn.Linear(42*width, 100)
+    self.conv1 = nn.Conv2d(3, 80, kernel_size=4, padding="same")
+    self.drop1 = nn.Dropout(p = 0.35)
+    self.conv2 = nn.Conv2d(80, 80, kernel_size=4, padding="same")
+    self.drop2 = nn.Dropout(p = 0.35)
+    self.conv3 = nn.Conv2d(80, 80, kernel_size=4, padding="same")
+    self.drop3 = nn.Dropout(p = 0.35)
+    self.conv4 = nn.Conv2d(80, 80, kernel_size=4, padding="same")
+    self.drop4 = nn.Dropout(p = 0.35)
+    self.fc1 = nn.Linear(42*80, 100)
     self.fc_policy = nn.Linear(100, 7)
     self.fc_value = nn.Linear(100, 1)
     self.policy_criterion = torch.nn.CrossEntropyLoss()
@@ -92,7 +91,7 @@ class AlphaZeroCNN(LightningModule):
     out3 = self.drop3(out3)
     out4 = F.relu(self.conv4(out3) + out3)
     out4 = self.drop4(out4)
-    out5 = out4.reshape(-1, 42*self.width)
+    out5 = out4.reshape(-1, 42*80)
     out = F.relu(self.fc1(out5))
     action_vals = self.fc_policy(out)
     if (apply_softmax):
