@@ -9,28 +9,27 @@ from src.players.components.checkpoint_utils import *
 from src.players.components.ResignCounter import ResignCounter
 from parse_utils import parse_args_trainer
 from src.players.components.AlphaZeroDataset import AlphaZeroDataset
+from src.players.components.EvalBuffer import EvalBuffer
 from src.players.components.net_utils import train_model, init_model
 import functools
 import pickle as pkl
 
 tqdm_slider = functools.partial(tqdm, leave=True, position=0)
 
-def init_players(model_a, model_b, game_args):
-  mcts_arg_names = ["explore_coeff", "mcts_iters", "temperature", "dirichlet_coeff", "dirichlet_alpha", "discount"]
+def init_players(buffer_a, buffer_b, game_args):
+  mcts_arg_names = ["explore_coeff", "mcts_iters", "temperature", "dirichlet_coeff", "dirichlet_alpha", "discount", "num_threads"]
   mcts_args = {arg_name: game_args[arg_name] for arg_name in mcts_arg_names}
-  player_a = AlphaZeroPlayer(model_a, mcts_args)
-  player_b = AlphaZeroPlayer(model_b, mcts_args)
+  player_a = AlphaZeroPlayer(buffer_a, mcts_args)
+  player_b = AlphaZeroPlayer(buffer_b, mcts_args)
   return player_a, player_b
 
-def play_game(model_a, model_b, game_args, save_trajectory, resign_counter):
+def play_game(buffer_a, buffer_b, game_args, save_trajectory, resign_counter):
   # initialize vars
   trajectory = []
   is_over = False
   resignations = {1: False, -1: False}
   resign_allowed = random.random() > game_args["resign_forbid_prob"]
   game = ConnectFour()
-  model_a.eval()
-  model_b.eval()
   player_a, player_b = init_players(model_a, model_b, game_args)
   
   # randomly decide first player
@@ -99,14 +98,17 @@ def create_datasets(game_trajectories, samples_per_game, flip_prob, validation_g
   val_data = AlphaZeroDataset(val_trajectories, samples_per_game, flip_prob)
   return train_data, val_data
 
-def eval_new_model(target_model, opponent_model, game_args, num_eval_games, win_threshold):
+
+def eval_new_model(target_buffer, opponent_buffer, game_args, num_eval_games, win_threshold):
+  target_buffer.model.eval()
+  opponent_buffer.model.eval()
   win_counter = 0
   game_args = game_args.copy()
   game_args["temp_drop_step"] = 0
   game_args["dirichlet_coeff"] = 0
   for i in tqdm_slider(range(num_eval_games), desc="eval games"):
-    outcome, _ = play_game(target_model, 
-                           opponent_model, 
+    outcome, _ = play_game(target_buffer, 
+                           opponent_buffer,
                            game_args, 
                            save_trajectory=False, 
                            resign_counter=None)
@@ -127,12 +129,12 @@ def train(args):
   seed_everything(args["seed"])
 
   # retrieve current best model (or initialize if no previous models)
-  latest_checkpoint_model = get_latest_model(args["checkpoint_dir"])
-  if (latest_checkpoint_model is None):
+  best_model = get_latest_model(args["checkpoint_dir"])
+  if (best_model is None):
     print("\nPitting against newly initialized model")
-    latest_checkpoint_model = init_model(args["train_args"], device) # AlphaZeroCNN(**args["train_args"])
+    best_model = init_model(args["train_args"], device) # AlphaZeroCNN(**args["train_args"])
 
-  game_trajectories = []
+  game_trajectories = load_game_trajectories(args["games_file"])
 
   for round_ind in tqdm_slider(range(args["rounds"]), desc="rounds"):
     print(f"\nRound: {round_ind}")
@@ -141,21 +143,25 @@ def train(args):
     # initialize training model to current best model
     #target_model = AlphaZeroCNN(**args["train_args"])
     #target_model.load_state_dict(latest_checkpoint_model.state_dict())
-    target_model = init_model(args["train_args"], device, latest_checkpoint_model)
+    #target_model = init_model(args["train_args"], device, latest_checkpoint_model)
    #copy.deepcopy(latest_checkpoint_model).to(device)
 
     # perform self-play games and collect play data
+    best_model.eval()
+    model_buffer = EvalBuffer(best_model, args["max_buffer_size"], args["max_wait_time"]) #TODO
     for game_ind in tqdm_slider(range(args["games_per_round"]), desc="training games"):
-      outcome, trajectory =  play_game(target_model, 
-                                       latest_checkpoint_model, 
+      outcome, trajectory =  play_game(model_buffer, 
+                                       model_buffer, 
                                        args["game_args"], 
                                        save_trajectory=True, 
                                        resign_counter=resign_counter)
       game_trajectories.append(trajectory)
       if (len(game_trajectories) > args["max_queue_len"]):
         game_trajectories.pop(0)
+    model_buffer.close()
 
-    pkl.dump(game_trajectories, open("a0_game_trajectories.pkl", "wb"))
+    if (args["games_file"] is not None):
+        pkl.dump(game_trajectories, open(args["games_file"], "wb"))
     resign_counter.print_stats()
 
     # train policy and value networks to predict action and state scores respectively
@@ -164,7 +170,7 @@ def train(args):
                                            args["flip_prob"], 
                                            args["validation_games"])
     print(f"Len train data: {len(train_data)}")
-    best_trained_model, save_checkpoint_handle = train_model(target_model, 
+    target_model, save_checkpoint_handle = train_model(best_model, 
                                          train_data, 
                                          val_data, 
                                          round_ind, 
@@ -172,14 +178,18 @@ def train(args):
                                          device)
 
     # evaluate newly trained model against previous best model
-    keep_new_model = eval_new_model(best_trained_model, 
-                       latest_checkpoint_model, 
+    target_buffer = EvalBuffer(target_model, args["max_buffer_size"], args["max_wait_time"])
+    opponent_buffer = EvalBuffer(best_model, args["max_buffer_size"], args["max_wait_time"])
+    keep_new_model = eval_new_model(target_buffer,
+                       opponent_buffer, 
                        args["game_args"], 
                        args["eval_games"], 
                        args["win_threshold"])
+    target_buffer.close()
+    opponent_buffer.close()
     if (keep_new_model):
       save_model(args["checkpoint_dir"], save_checkpoint_handle)
-      latest_checkpoint_model = best_trained_model
+      best_model = target_model
 
 if __name__ == "__main__":
   args = parse_args_trainer()
