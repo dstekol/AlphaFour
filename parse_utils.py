@@ -12,20 +12,25 @@ def parse_args_trainer():
   parser.add_argument("--eval-games", default=3, type=positive_int, help="Number of evaluation games to play between newly trained model and previous best model")
   parser.add_argument("--win-threshold", default=0.55, type=constrained_float, help="Fraction of evaluation games that newly trained model must win to replace previous best model")
   parser.add_argument("--checkpoint-dir", required=True, type=valid_checkpoint_dir, help="Directory for model checkpoints (if checkpoints already exist in this directory, the trainer will use them as a starting point)")
+  parser.add_argument("--games-file", type=str, help="File where game trajectories should be saved. If it already exists, it will be loaded on startup and overwritten on each round.")
   parser.add_argument("--flip-prob", default=0.5, type=constrained_float, help="Probability that input is flipped while training neural network (for data augmentation)")
   parser.add_argument("--max-queue-len", default=300, type=positive_int, help="Maximum number of self-play games to retain in the training queue")
+  parser.add_argument("--max-buffer-size", default=6, type=positive_int, help="Maximum GPU buffer size (should be at most number of threads)")
+  parser.add_argument("--max-wait-time", default=2, type=positive_int, help="Maximum amount of time  (in milliseconds) to wait before flushing GPU buffer")
 
   train_args = parser.add_argument_group("train_args")
-  train_args.add_argument("--epochs-per-round", default=1, type=positive_int, help="How many backpropagation epochs to train model on data collected from each round")
+  train_args.add_argument("--max-epochs", default=1, type=positive_int, help="Max number of backpropagation epochs to train model on data collected from each round")
+  train_args.add_argument("--min-epochs", default=1, type=positive_int, help="Min number of backpropagation epochs to train model on data collected from each round")
   train_args.add_argument("--batch-size", default=10, type=positive_int, help="Batch size for training neural network")
   train_args.add_argument("--value-weight", default=0.5, type=float, help="Weight to put on value prediction relative to policy prediction (1 means all weight on value, 0 means all weight on policy)")
   train_args.add_argument("--lr", default=3e-4, type=float, help="Learning rate for training neural network")
   train_args.add_argument("--l2-reg", default=1e-5, type=float, help="Strength of L2 regularization for neural network")
   train_args.add_argument("--log-dir", default=".", type=str, help="Logging directory for tensorboard logs")
-  train_args.add_argument("--patience", default=7, type=positive_int, help="Number of non-improving steps to wait before stopping training")
+  train_args.add_argument("--patience", default=7, type=int, help="Number of non-improving steps to wait before stopping training")
   train_args.add_argument("--train-attempts", default=7, type=positive_int, help="Number of training runs to perform at each iteration (best model is selected based on validation loss)")
 
   game_args = parser.add_argument_group("game_args")
+  game_args.add_argument("--num_threads", default=8, type=positive_int, help="Number of threads for MCTS")
   game_args.add_argument("--mcts-iters", default=100, type=positive_int, help="Number of PUCT simulations to execute for each move")
   game_args.add_argument("--discount", default=0.96, type=float, help="Per-step discount factor for rewards (to encourage winning quickly)")
   game_args.add_argument("--explore_coeff", default=1, type=float, help="Exploration coefficient for MCTS/PUCT search")
@@ -41,27 +46,32 @@ def parse_args_trainer():
   return {"seed": 42,
           "cuda": True,
           "rounds": 30,
-          "games_per_round": 1500,
-          "eval_games": 20,
+          "games_per_round": 5,
+          "eval_games": 2,
           "win_threshold": 0.55,
-          "checkpoint_dir": Path("checkpoints_v3"),
+          "checkpoint_dir": Path("checkpoints_v4"),
+          "games_file": "games_v4.pkl",
           "flip_prob": 0.5,
           "samples_per_game": 5,
           "validation_games": 0.10,
           "max_queue_len": 4500,
+          "max_buffer_size": 6,
+          "max_wait_time": 2,
           "train_args": {
-            "patience": 7,
+            "patience": None,
             "train_attempts": 6,
-            "log_dir": "alphazero_logs_v3",
-            "epochs_per_round": 5,
+            "log_dir": "alphazero_logs_v4",
+            "max_epochs": 15,
+            "min_epochs": 5,
             "batch_size": 20,
             "value_weight": 0.5,
             "lr": 1e-3,
             "l2_reg": 1e-3
             },
           "game_args": {
+            "num_threads": 8,
             "discount": 0.96,
-            "mcts_iters": 400,
+            "mcts_iters": 20,
             "explore_coeff": 1,
             "temperature": 1,
             "temp_drop_step": 5,

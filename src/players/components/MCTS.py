@@ -1,6 +1,7 @@
 import math
 import random
 import numpy as np
+import threading
 
 def hashable_game_state(game):
   return game.board.tobytes()
@@ -12,7 +13,8 @@ class MCTS:
                      explore_coeff, 
                      temperature, 
                      dirichlet_coeff, 
-                     dirichlet_alpha):
+                     dirichlet_alpha,
+                     num_threads):
     self.nodes = dict()
     self.explore_coeff = explore_coeff
     self.eval_func = eval_func
@@ -21,6 +23,7 @@ class MCTS:
     self.dirichlet_alpha = dirichlet_alpha
     self.discount = discount
     self.mcts_iters = mcts_iters
+    self.num_threads = num_threads
 
   def update_temperature(self, temperature):
     self.temperature = temperature
@@ -33,8 +36,26 @@ class MCTS:
     return node.action_scores(actions, temperature)
 
   def search(self, game):
+    self.global_sims_finished = 0
+    lock = threading.RLock()
+    threads = []
+    for i in range(self.num_threads):
+      t = threading.Thread(target=self.search_thread, args=(game, lock))
+      threads.append(t)
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    orig_state = hashable_game_state(game)
+    current_node = self.nodes[orig_state]
+    return current_node.sample_best_action(self.temperature, 
+                                           self.dirichlet_coeff, 
+                                           self.dirichlet_alpha)
+
+
+  def search_thread(self, game, lock):
     orig_game = game
-    for i in range(self.mcts_iters):
+    num_sims_finished = 0
+    while (num_sims_finished < self.mcts_iters):
+      #print(num_sims_finished)
       game = orig_game.copy()
       is_over = False
       trajectory = []
@@ -53,6 +74,7 @@ class MCTS:
         else:
           node = self.nodes[state]
         action = node.max_uct_action()
+        node.incur_virtual_loss(action)
         trajectory.append((state, action))
         game.perform_move(action)
       for j, (state, action) in enumerate(trajectory):
@@ -60,11 +82,12 @@ class MCTS:
         moves_until_end = len(trajectory) - j - 1
         discounted_outcome = signed_outcome * (self.discount ** moves_until_end)
         self.nodes[state].update_action_value(action, signed_outcome)
-    orig_state = hashable_game_state(orig_game)
-    current_node = self.nodes[orig_state]
-    return current_node.sample_best_action(self.temperature, 
-                                           self.dirichlet_coeff, 
-                                           self.dirichlet_alpha)
+      with lock:
+        self.global_sims_finished += 1
+        num_sims_finished = self.global_sims_finished
+    #print(f"exiting {threading.get_ident()}__________________________")
+
+    
 
 
 class MCTSNode:
@@ -75,50 +98,63 @@ class MCTSNode:
     self.action_count = np.zeros((total_actions,))
     self.total_count = 0
     self.action_total_value = np.zeros((total_actions,))
+    self.lock = threading.RLock()
 
   def q_value(self, action):
-    return float(self.action_total_value[action]) / (float(self.action_count[action]) + 1e-6)
+    with self.lock:
+      return float(self.action_total_value[action]) / (float(self.action_count[action]) + 1e-6)
 
   def action_uct(self, action):
-    conf_bound = math.sqrt(self.total_count) / (1 + self.action_count[action])
-    return self.q_value(action) + self.explore_coeff * conf_bound
+    with self.lock:
+      conf_bound = math.sqrt(self.total_count) / (1 + self.action_count[action])
+      return self.q_value(action) + self.explore_coeff * conf_bound
 
   def max_uct_action(self):
-    max_action_uct = -math.inf
-    max_actions = []
-    for action in self.actions:
-      action_uct = self.action_uct(action)
-      if (action_uct > max_action_uct):
-        max_actions = [action]
-        max_action_uct = action_uct
-      elif (action_uct == max_action_uct):
-        max_actions.append(action)
-    if (len(max_actions) == 1):
-      return max_actions[0]
-    else:
-      return random.choice(max_actions)
+    with self.lock:
+      max_action_uct = -math.inf
+      max_actions = []
+      for action in self.actions:
+        action_uct = self.action_uct(action)
+        if (action_uct > max_action_uct):
+          max_actions = [action]
+          max_action_uct = action_uct
+        elif (action_uct == max_action_uct):
+          max_actions.append(action)
+      if (len(max_actions) == 1):
+        return max_actions[0]
+      else:
+        return random.choice(max_actions)
 
   def action_scores(self, actions, temperature):
-    if (temperature == 0):
-      max_count = self.action_count.max()
-      weights = (self.action_count == max_count)[actions]
-    else:
-      weights = np.zeros_like(actions)
-      for i, action in enumerate(actions):
-        weights[i] = self.action_count[action]**(1 / temperature)
-    weights = weights / weights.sum()
-    return weights
+    with self.lock:
+      if (temperature == 0):
+        max_count = self.action_count.max()
+        weights = (self.action_count == max_count)[actions]
+      else:
+        weights = np.zeros_like(actions)
+        for i, action in enumerate(actions):
+          weights[i] = self.action_count[action]**(1 / temperature)
+      weights = weights / weights.sum()
+      return weights
+
+  def incur_virtual_loss(self, action):
+    with self.lock:
+      self.total_count += 1
+      self.action_count[action] += 1
+      self.action_total_value[action] -= 1
 
   def sample_best_action(self, temperature, dirichlet_coeff, dirichlet_alpha):
-    weights = self.action_scores(self.actions, temperature)
-    noise = np.random.dirichlet(alpha = [dirichlet_alpha] * len(weights))
-    weights = (1 - dirichlet_coeff) * weights + dirichlet_coeff * noise
-    return random.choices(self.actions, weights=weights, k=1)[0]
+    with self.lock:
+      weights = self.action_scores(self.actions, temperature)
+      noise = np.random.dirichlet(alpha = [dirichlet_alpha] * len(weights))
+      weights = (1 - dirichlet_coeff) * weights + dirichlet_coeff * noise
+      return random.choices(self.actions, weights=weights, k=1)[0]
 
   def update_action_value(self, action, value):
-    self.total_count += 1
-    self.action_total_value[action] += value
-    self.action_count[action] += 1
+    with self.lock:
+      #self.total_count += 1
+      self.action_total_value[action] += value + 1
+      #self.action_count[action] += 1
 
 
 

@@ -14,7 +14,7 @@ def one_hot_state(game):
 def postprocess_tensor(t):
   return t.cpu().detach().squeeze().numpy()
 
-def eval_func(model, game, actions):
+def eval_func_direct(model, game, actions):
   with torch.no_grad():
     x = torch.tensor(one_hot_state(game), dtype=torch.float32).unsqueeze(0).to(model.device)
     action_vals, state_vals = model(x, apply_softmax=True)
@@ -22,11 +22,20 @@ def eval_func(model, game, actions):
     state_vals = postprocess_tensor(state_vals) * game.player # fixed
     return action_vals, state_vals
 
+def eval_func_buffer(buffer, game, actions):
+  return buffer.enqueue([one_hot_state(game)])[0]
+
+def eval_func_test(buffer, game, actions):
+  action_vals, state_vals = eval_func_buffer(buffer, game, actions)
+  return action_vals, None
+
+
 class AlphaZeroPlayer(ConnectFourPlayer):
-  def __init__(self, model, mcts_args):
+  def __init__(self, buffer, mcts_args):
     super().__init__()
-    self.model = model
-    self.mcts = MCTS(eval_func=lambda game, actions: eval_func(model, game, actions), **mcts_args)
+    self.buffer = buffer
+    eval_func = lambda game, actions: eval_func_buffer(self.buffer, game, actions)
+    self.mcts = MCTS(eval_func=eval_func, **mcts_args)
 
   def drop_temperature(self):
     self.mcts.update_temperature(0)
@@ -43,9 +52,10 @@ class AlphaZeroPlayer(ConnectFourPlayer):
     with torch.no_grad():
       eval_states = self._get_successors(game)
       eval_states.append(game)
-      x = torch.tensor(np.array([one_hot_state(s) for s in eval_states]), dtype=torch.float32).to(self.model.device)
-      action_vals, state_vals = self.model(x)
-      state_vals = postprocess_tensor(state_vals)
+      action_vals, state_vals = self.buffer.enqueue(eval_states)
+      #x = torch.tensor(np.array([one_hot_state(s) for s in eval_states]), dtype=torch.float32).to(self.model.device)
+      #action_vals, state_vals = self.model(x)
+      #state_vals = postprocess_tensor(state_vals)
       state_vals[:-1] *= -1
       return (state_vals < resign_threshold).all()
 

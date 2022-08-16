@@ -1,108 +1,87 @@
 import threading
 import torch
 import numpy as np
+import time
 
 class EvalBuffer:
-  def __init__(self, max_buffer_size, max_wait_time):
-    self.models = []
-    self.input_buffers = dict()
-    self.condition_buffers = dict()
-    self.enqueue_times = dict()
-    self.input_buffer_ids = dict()
+  def __init__(self, model, max_buffer_size, max_wait_time):
+    self.model = model
+    self.input_buffer = []
+    self.condition_buffer = []
+    self.enqueue_time = None
+    self.input_buffer_ids = []
     self.processed = dict()
     self.max_buffer_size = max_buffer_size
     self.enqueue_condition = threading.Condition()
     self.max_wait_time = max_wait_time
-    self.lock = threading.Lock()
+    self.lock = threading.RLock()
     self.buffer_id_counter = 0
+    self.active = True
+    self.manager_thread = threading.Thread(target = self._manage_buffer, args=[])
+    self.manager_thread.start()
+    
 
-  def get_enqueue_condition(self):
-    return self.enqueue_condition
+  def _manage_buffer(self):
+    with self.enqueue_condition:
+      while (self.active):
+        self.enqueue_condition.wait(self.max_wait_time / 1000)
+        current_time = int(time.time() * 1000)
+        buffer_len = len(self.input_buffer)
+        if (buffer_len >= self.max_buffer_size 
+          or (self.enqueue_time is not None 
+              and current_time - self.enqueue_time >= self.max_wait_time)):
+          self._flush()
+
+  def close(self):
+    self.active = False
+    with self.enqueue_condition:
+      self.enqueue_condition.notify()
+    self.manager_thread.join()
 
   def _get_buffer_id(self):
     self.buffer_id_counter += 1
     return self.buffer_id_counter - 1
 
-  def get_max_wait_time(self):
-    return self.max_wait_time
-
-  def register_model(self, model):
+  def enqueue(self, inputs):
     with self.lock:
-      if (model in self.models):
-        return
-      self.models.append(model)
-      model_ind = len(self.models)
-      self.input_buffers[model_ind] = []
-      self.condition_buffers[model_ind] = []
-      self.input_buffer_ids = []
-      self.enqueue_times[model_ind] = None
+      condition = threading.Condition()
+      buffer_ids = [self._get_buffer_id() for i in range(len(inputs))]
 
-  def deregister_model(self, model):
-    with self.lock:
-      if (not model in self.models):
-        return
-      model_ind = self.models.index(model)
-      self.models[self.models] = None
-      self.input_buffers[model_ind] = []
-      self.condition_buffers[model_ind] = []
-      self.input_buffer_ids = []
-      self.enqueue_times[model_ind] = None
-
-  def queue_inputs(self, model, inputs):
-    with self.lock:
-      model_ind = self.models.index(model)
-      condition = thread.Condition()
-      buffer_ids = [self._get_buffer_id() for i in range(len(inps))]
-      current_time = int(time.time() * 1000)
-
-      self.condition_buffers[model_ind].append(condition)
-      self.enqueue_times[model_ind] = current_time
-      self.input_buffers[model_ind].extend(inputs)
-      self.input_buffer_ids[model_ind].extend(buffer_ids)
+      self.condition_buffer.append(condition)
+      self.enqueue_time = int(time.time() * 1000)
+      self.input_buffer.extend(inputs)
+      self.input_buffer_ids.extend(buffer_ids)
     with self.enqueue_condition:
-      self.enqueue_condition.notify()
+        self.enqueue_condition.notify()
     with condition:
-      condition.wait()
+      #print(f"waiting {threading.get_ident()}")
+      if (condition in self.condition_buffer):
+        condition.wait()
+      #print(f"unwaiting {threading.get_ident()}")
     outputs = []
     for buffer_id in buffer_ids:
-      outputs.append(self.processed[buffer_id])
+      outputs.append(self.processed[buffer_id]) 
       del self.processed[buffer_id]
     return outputs
 
-  def flush(self):
+  def _flush(self):
     with self.lock:
-      for model_ind, model in enumerate(self.models):
-        enqueue_time = self.enqueue_times[model_ind]
-        current_time = int(time.time() * 1000)
-        buffer_len = len(self.input_buffers[model_ind])
-        if (buffer_len >= self.max_buffer_size 
-            or (enqueue_time is not None and current_time - enqueue_time >= self.max_wait_time)):
-          input_buffer = self.input_buffers[model_ind]
-          buffer_ids = self.input_buffer_ids[model_ind]
-          conditions = self.condition_buffers[model_ind]
+      with torch.no_grad():
+        x = torch.tensor(np.array(self.input_buffer), dtype=torch.float32, device=self.model.device)
+        actions_vals, state_vals = self.model(x, apply_softmax=True)
+        actions_vals = actions_vals.cpu().detach().numpy()
+        state_vals = state_vals.cpu().detach().numpy()
 
-          x = torch.tensor(np.array(input_buffer)).to(model.device)
-          actions_vals, state_vals = model(x)
-          actions_vals = actions_vals.cpu().detach().numpy()
-          state_vals = state_vals.cpu().detach().numpy()
+      for i, buffer_id in enumerate(self.input_buffer_ids):
+        self.processed[buffer_id] = (actions_vals[i], state_vals[i])
+        
+      conditions = self.condition_buffer
 
-          for i, buffer_id in enumerate(buffer_ids):
-            self.processed[buffer_id] = (actions_vals[i], state_vals[i])
-          
-          self.input_buffers[model_ind] = []
-          self.input_buffer_ids[model_ind] = []
-          self.condition_buffers[model_ind] = []
-          self.enqueue_times[model_ind] = None
+      self.input_buffer = []
+      self.input_buffer_ids = []
+      self.condition_buffer = []
+      self.enqueue_time = None
 
-          for condition in conditions:
-            with condition:
-              condition.notify()
-
-
-def manage_buffer(eval_buffer):
-  enqueue_condition = eval_buffer.get_enqueue_condition()
-  max_wait_time = eval_buffer.get_max_wait_time()
-  while (True):
-    with enqueue_condition:
-      enqueue_condition.wait(max_wait_time)
-      eval_buffer.flush()
+      for condition in conditions:
+        with condition:
+          condition.notify()
