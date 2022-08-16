@@ -343,3 +343,16 @@ healthchecksdb
 *.pyproj
 *.pyperf
 /lightning_logs
+/checkpoints_v3
+/logs
+/old checkpoints
+/a0_game_trajectories v3 (1500 @ 400).pkl
+/a0_game_trajectories v2 (1500 @ 200).pkl
+/a0_game_trajectories v1 (1500 @ 200).pkl
+/lr_find_temp_model_2cdb36ec-b9a9-40d6-848c-17ca83806714.ckpt
+/game_data - Copy.pkl
+/finished_game_data.pkl
+/training experiments.txt
+/todo.txt
+/sl_model.ckpt
+/processed_data.pkl
