@@ -41,7 +41,9 @@ def save_model(checkpoint_dir, save_checkpoint_handle):
   save_checkpoint_handle(checkpoint_path)
 
 def load_game_trajectories(games_file):
-  if (not os.path.isfile(games_file)):
+  if (games_file is None or not os.path.isfile(games_file)):
+    print("No saved trajectories")
     return []
   else:
+    print("Loading saved trajectories")
     return pkl.load(open(games_file, "rb"))

@@ -37,8 +37,8 @@ class AlphaZeroPlayer(ConnectFourPlayer):
     eval_func = lambda game, actions: eval_func_buffer(self.buffer, game, actions)
     self.mcts = MCTS(eval_func=eval_func, **mcts_args)
 
-  def drop_temperature(self):
-    self.mcts.update_temperature(0)
+  def drop_temperature(self, temp=0.1):
+    self.mcts.update_temperature(temp)
 
   def _get_successors(self, game):
     successors = []
@@ -50,9 +50,12 @@ class AlphaZeroPlayer(ConnectFourPlayer):
 
   def should_resign(self, game, resign_threshold):
     with torch.no_grad():
-      eval_states = self._get_successors(game)
-      eval_states.append(game)
-      action_vals, state_vals = self.buffer.enqueue(eval_states)
+      eval_games = self._get_successors(game)
+      eval_games.append(game)
+      eval_states = [one_hot_state(g) for g in eval_games]
+      out = self.buffer.enqueue(eval_states)
+      action_vals, state_vals = zip(*out)
+      state_vals = np.concatenate(state_vals, axis=0)
       #x = torch.tensor(np.array([one_hot_state(s) for s in eval_states]), dtype=torch.float32).to(self.model.device)
       #action_vals, state_vals = self.model(x)
       #state_vals = postprocess_tensor(state_vals)

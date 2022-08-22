@@ -49,6 +49,7 @@ def train_model(model, train_data, val_data, round_ind, train_args, device):
   best_model = None
   for i in range(train_args["train_attempts"]):
     model_copy = init_model(train_args, device, model)
+    model_copy.train()
     trainer = train_model_attempt(model_copy, train_loader, val_loader, round_ind, train_args, device)
     if (trainer.logged_metrics["val/loss"] < best_val_loss):
       best_val_loss = trainer.logged_metrics["val/loss"]

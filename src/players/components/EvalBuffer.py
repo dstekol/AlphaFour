@@ -42,6 +42,11 @@ class EvalBuffer:
     self.buffer_id_counter += 1
     return self.buffer_id_counter - 1
 
+  #def check_duplicates(self):
+  #  inputs = self.input_buffer[:]
+  #  s = set([item.tobytes() for item in inputs])
+  #  print(f"dups: {len(inputs) - len(s)}")
+
   def enqueue(self, inputs):
     with self.lock:
       condition = threading.Condition()
@@ -67,6 +72,7 @@ class EvalBuffer:
   def _flush(self):
     with self.lock:
       with torch.no_grad():
+        #self.check_duplicates()
         x = torch.tensor(np.array(self.input_buffer), dtype=torch.float32, device=self.model.device)
         actions_vals, state_vals = self.model(x, apply_softmax=True)
         actions_vals = actions_vals.cpu().detach().numpy()

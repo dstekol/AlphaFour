@@ -16,6 +16,10 @@ class MCTS:
                      dirichlet_alpha,
                      num_threads):
     self.nodes = dict()
+    #self.nodes_orig = dict()
+    self.nodes_lock = threading.RLock()
+    self.global_sims_finished = 0
+    self.global_counter_lock = threading.RLock()
     self.explore_coeff = explore_coeff
     self.eval_func = eval_func
     self.temperature = temperature
@@ -24,6 +28,7 @@ class MCTS:
     self.discount = discount
     self.mcts_iters = mcts_iters
     self.num_threads = num_threads
+
 
   def update_temperature(self, temperature):
     self.temperature = temperature
@@ -37,10 +42,9 @@ class MCTS:
 
   def search(self, game):
     self.global_sims_finished = 0
-    lock = threading.RLock()
     threads = []
     for i in range(self.num_threads):
-      t = threading.Thread(target=self.search_thread, args=(game, lock))
+      t = threading.Thread(target=self.search_thread, args=(game,))
       threads.append(t)
     [t.start() for t in threads]
     [t.join() for t in threads]
@@ -50,29 +54,76 @@ class MCTS:
                                            self.dirichlet_coeff, 
                                            self.dirichlet_alpha)
 
+  def _replace_condition_with_node(self, state, node):
+    condition = self.nodes[state]
+    if (not isinstance(condition, threading.Condition)):
+      raise LookupError("Overwriting precomputed node")
+    self.nodes[state] = node
+    with condition:
+      #print(f"finishing adding state: {threading.get_ident()}")
+      condition.notify_all()
 
-  def search_thread(self, game, lock):
+  #def print_entropy(self):
+  #  s = 0
+  #  c = 0
+  #  for state in self.nodes:
+  #    node = self.nodes[state]
+  #    if (not isinstance(node, MCTSNode)):
+  #      continue
+      
+  #    s += node.entropy()
+  #    c += 1
+  #  print("avg entropy")
+  #  if (c != 0):
+  #    print(s / c)
+
+  def search_thread(self, game):
     orig_game = game
     num_sims_finished = 0
     while (num_sims_finished < self.mcts_iters):
+      #print(f"thread: {threading.get_ident()}")
       #print(num_sims_finished)
       game = orig_game.copy()
       is_over = False
       trajectory = []
       while(not is_over):
         state = hashable_game_state(game)
-        if (state not in self.nodes):
+
+        with self.nodes_lock:
+          state_present = state in self.nodes
+          if (not state_present):
+            #print(f"adding state: {threading.get_ident()}")
+            self.nodes[state] = threading.Condition()
+            #self.nodes_orig[state] = threading.get_ident()
+
+        if (not state_present):
           is_over, outcome = game.game_over()
           if (is_over):
+            self._replace_condition_with_node(state, outcome)
             break
           actions = game.valid_moves()
           priors, outcome = self.eval_func(game, actions)
           node = MCTSNode(actions, priors, self.explore_coeff, game.cols)
-          self.nodes[state] = node
+          self._replace_condition_with_node(state, node)
           if (outcome is not None):
             break
         else:
-          node = self.nodes[state]
+          item = self.nodes[state]
+          if (isinstance(item, threading.Condition)):
+            with item:
+              #orig_t = self.nodes_orig[state]
+              #print(f"waiting for state: {threading.get_ident()} added by {orig_t}")
+              if (isinstance(self.nodes[state], threading.Condition)):
+                item.wait()
+              #print(f"restarting thread: {threading.get_ident()} added by {orig_t}")
+              node = self.nodes[state]
+          elif (isinstance(item, int)):
+            outcome = item
+            break
+          elif (isinstance(item, MCTSNode)):
+            node = item
+          else:
+            raise LookupError("Illegal object in node map")
         action = node.max_uct_action()
         node.incur_virtual_loss(action)
         trajectory.append((state, action))
@@ -82,7 +133,7 @@ class MCTS:
         moves_until_end = len(trajectory) - j - 1
         discounted_outcome = signed_outcome * (self.discount ** moves_until_end)
         self.nodes[state].update_action_value(action, signed_outcome)
-      with lock:
+      with self.global_counter_lock:
         self.global_sims_finished += 1
         num_sims_finished = self.global_sims_finished
     #print(f"exiting {threading.get_ident()}__________________________")
@@ -125,16 +176,24 @@ class MCTSNode:
       else:
         return random.choice(max_actions)
 
+  #def entropy(self):
+  #  if (self.total_count == 0):
+  #    return 0
+  #  norm_act_counts = (self.action_count + 0.01) / self.action_count.sum()
+  #  return -(norm_act_counts * np.log(norm_act_counts)).sum()
+
   def action_scores(self, actions, temperature):
     with self.lock:
+      if (self.total_count == 0):
+        raise ValueError("Weights sum to 0")
       if (temperature == 0):
         max_count = self.action_count.max()
-        weights = (self.action_count == max_count)[actions]
+        weights = (self.action_count == max_count)[actions].astype(int)
       else:
-        weights = np.zeros_like(actions)
-        for i, action in enumerate(actions):
-          weights[i] = self.action_count[action]**(1 / temperature)
-      weights = weights / weights.sum()
+        weights = self.action_count[actions]
+        weights = weights / weights.sum()
+        weights = weights ** (1 / temperature)
+        weights = weights / weights.sum()
       return weights
 
   def incur_virtual_loss(self, action):
@@ -147,8 +206,13 @@ class MCTSNode:
     with self.lock:
       weights = self.action_scores(self.actions, temperature)
       noise = np.random.dirichlet(alpha = [dirichlet_alpha] * len(weights))
-      weights = (1 - dirichlet_coeff) * weights + dirichlet_coeff * noise
-      return random.choices(self.actions, weights=weights, k=1)[0]
+      noisy_weights = (1 - dirichlet_coeff) * weights + dirichlet_coeff * noise
+      move = random.choices(self.actions, weights=noisy_weights, k=1)[0]
+      #if (move != self.actions[weights.argmax()]):
+      #  print(weights.round(4))
+      #  print((self.action_count[self.actions] / self.action_count[self.actions].sum()).round(4))
+      #  #print(noisy_weights.round(4))
+      return move
 
   def update_action_value(self, action, value):
     with self.lock:

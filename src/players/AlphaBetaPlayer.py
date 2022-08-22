@@ -181,8 +181,8 @@ class AlphaBetaScorer:
     self.stacked_threat_reward_bounds = stacked_threat_reward_bounds
 
   def score(self, game, winner, depth):
-    if (abs(self.base_score(game, winner)  * (self.discount_factor ** depth)) > 1): #debug
-      i = 1
+    #if (abs(self.base_score(game, winner)  * (self.discount_factor ** depth)) > 1): #debug
+    #  i = 1
     return self.base_score(game, winner)  * (self.discount_factor ** depth)
 
   def base_score(self, game, winner):
@@ -198,8 +198,6 @@ class AlphaBetaScorer:
           num_high_threats += 1
         else:
           num_low_threats += 1
-      if (num_low_threats == 5):
-          i = 1
       reward += player * self.map_to_asymptotic(num_low_threats, 
                                                 self.low_threat_reward_bounds)
       reward += player * self.map_to_asymptotic(num_high_threats,
