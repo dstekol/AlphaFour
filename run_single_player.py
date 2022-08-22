@@ -15,12 +15,12 @@ cnct4 = ConnectFour()
 
 mcts_args = {
             "discount": 0.96,
-            "mcts_iters": 1000,
+            "mcts_iters": 4000,
             "explore_coeff": 1,
             "temperature": 0,
             "dirichlet_coeff": 0,
             "dirichlet_alpha": 0.03,
-            "num_threads": 1
+            "num_threads": 30
             }
 
 class FakeModel:
@@ -37,7 +37,7 @@ model = FakeModel()
 #player = MCTSPlayer(mcts_args)
 #model = AlphaZeroFCN.load_from_checkpoint("sl_model.ckpt").cuda()
 model = AlphaZeroCNN(0, 0, 0)
-buffer = EvalBuffer(model, 1, 2)
+buffer = EvalBuffer(model, 15, 2)
 player = AlphaZeroPlayer(buffer, mcts_args)
 is_over = False
 winner = 0
@@ -55,6 +55,7 @@ if (not human_first):
 cnct4.print_board()
 while(not is_over):
   print(len(player.mcts.nodes))
+  #player.mcts.print_entropy()
   try: 
     print_eval(cnct4)
     col = int(input(f"Move: ")) - 1

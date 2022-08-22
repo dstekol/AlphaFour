@@ -162,5 +162,11 @@ To play a
  even for disadvantageous positions.
 
 
+ stuff
+ data re-discounting lowering loss
+ too much exploration: high dirichlet noise coeff compared to go
+ mixing data from different net versions bad
+
+
 
 ## References

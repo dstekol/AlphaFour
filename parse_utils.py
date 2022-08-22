@@ -12,11 +12,13 @@ def parse_args_trainer():
   parser.add_argument("--eval-games", default=3, type=positive_int, help="Number of evaluation games to play between newly trained model and previous best model")
   parser.add_argument("--win-threshold", default=0.55, type=constrained_float, help="Fraction of evaluation games that newly trained model must win to replace previous best model")
   parser.add_argument("--checkpoint-dir", required=True, type=valid_checkpoint_dir, help="Directory for model checkpoints (if checkpoints already exist in this directory, the trainer will use them as a starting point)")
-  parser.add_argument("--games-file", type=str, help="File where game trajectories should be saved. If it already exists, it will be loaded on startup and overwritten on each round.")
+  parser.add_argument("--games-input-file", default=None, type=str, help="File from which game trajectories should be loaded on startup (in case training was interrupted and is being restarted). If None, no trajectories will be loaded.")
+  parser.add_argument("--games-output-file", default=None, type=str, help="File where game trajectories should be saved (for checkpointing). Will be overwritten on each round. If None, trajectories will not be checkpointed.")
   parser.add_argument("--flip-prob", default=0.5, type=constrained_float, help="Probability that input is flipped while training neural network (for data augmentation)")
   parser.add_argument("--max-queue-len", default=300, type=positive_int, help="Maximum number of self-play games to retain in the training queue")
   parser.add_argument("--max-buffer-size", default=6, type=positive_int, help="Maximum GPU buffer size (should be at most number of threads)")
   parser.add_argument("--max-wait-time", default=2, type=positive_int, help="Maximum amount of time  (in milliseconds) to wait before flushing GPU buffer")
+  parser.add_argument("--round-start-ind", default=0, type=positive_int, help="The index of the first round (for logging purposes). Should be zero unless restarting from a checkpoint.")
 
   train_args = parser.add_argument_group("train_args")
   train_args.add_argument("--max-epochs", default=1, type=positive_int, help="Max number of backpropagation epochs to train model on data collected from each round")
@@ -46,39 +48,41 @@ def parse_args_trainer():
   return {"seed": 42,
           "cuda": True,
           "rounds": 30,
-          "games_per_round": 5,
-          "eval_games": 2,
+          "games_per_round": 1500,
+          "eval_games": 20,
           "win_threshold": 0.55,
-          "checkpoint_dir": Path("checkpoints_v4"),
-          "games_file": "games_v4.pkl",
+          "checkpoint_dir": Path("checkpoints_v7"),
+          "games_input_file": None,
+          "games_output_file": "games_v7.pkl",
           "flip_prob": 0.5,
-          "samples_per_game": 5,
+          "samples_per_game": None,
           "validation_games": 0.10,
           "max_queue_len": 4500,
-          "max_buffer_size": 6,
-          "max_wait_time": 2,
+          "max_buffer_size": 20,
+          "max_wait_time": 0.1,
+          "round_start_ind": 0,
           "train_args": {
-            "patience": None,
-            "train_attempts": 6,
-            "log_dir": "alphazero_logs_v4",
+            "patience": 15,
+            "train_attempts": 5,
+            "log_dir": "alphazero_logs_v7",
             "max_epochs": 15,
             "min_epochs": 5,
-            "batch_size": 20,
+            "batch_size": 100,
             "value_weight": 0.5,
             "lr": 1e-3,
             "l2_reg": 1e-3
             },
           "game_args": {
-            "num_threads": 8,
+            "num_threads": 45,
             "discount": 0.96,
-            "mcts_iters": 20,
+            "mcts_iters": 250,
             "explore_coeff": 1,
             "temperature": 1,
             "temp_drop_step": 5,
             "resign_threshold": -0.85,
             "resign_forbid_prob": 0.1,
-            "dirichlet_coeff": 0.25,
-            "dirichlet_alpha": 0.03
+            "dirichlet_coeff": 0,
+            "dirichlet_alpha": 0.3
             }
     }
 

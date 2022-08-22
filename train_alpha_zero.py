@@ -30,7 +30,7 @@ def play_game(buffer_a, buffer_b, game_args, save_trajectory, resign_counter):
   resignations = {1: False, -1: False}
   resign_allowed = random.random() > game_args["resign_forbid_prob"]
   game = ConnectFour()
-  player_a, player_b = init_players(model_a, model_b, game_args)
+  player_a, player_b = init_players(buffer_a, buffer_b, game_args)
   
   # randomly decide first player
   player_a_first = bool(random.getrandbits(1))
@@ -134,17 +134,11 @@ def train(args):
     print("\nPitting against newly initialized model")
     best_model = init_model(args["train_args"], device) # AlphaZeroCNN(**args["train_args"])
 
-  game_trajectories = load_game_trajectories(args["games_file"])
+  game_trajectories = load_game_trajectories(args["games_input_file"])
 
-  for round_ind in tqdm_slider(range(args["rounds"]), desc="rounds"):
+  for round_ind in tqdm_slider(range(args["round_start_ind"], args["round_start_ind"] + args["rounds"]), desc="rounds"):
     print(f"\nRound: {round_ind}")
     resign_counter = ResignCounter()
-
-    # initialize training model to current best model
-    #target_model = AlphaZeroCNN(**args["train_args"])
-    #target_model.load_state_dict(latest_checkpoint_model.state_dict())
-    #target_model = init_model(args["train_args"], device, latest_checkpoint_model)
-   #copy.deepcopy(latest_checkpoint_model).to(device)
 
     # perform self-play games and collect play data
     best_model.eval()
@@ -160,8 +154,8 @@ def train(args):
         game_trajectories.pop(0)
     model_buffer.close()
 
-    if (args["games_file"] is not None):
-        pkl.dump(game_trajectories, open(args["games_file"], "wb"))
+    if (args["games_output_file"] is not None):
+        pkl.dump(game_trajectories, open(args["games_output_file"], "wb"))
     resign_counter.print_stats()
 
     # train policy and value networks to predict action and state scores respectively
