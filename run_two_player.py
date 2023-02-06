@@ -7,8 +7,8 @@ if __name__ == "__main__":
 
   while (not is_over):
     cnct4.print_board()
-    col = int(input(f"Player {player} move: ")) - 1
     try: 
+      col = int(input(f"Player {2 if player==-1 else 1} move: ")) - 1
       cnct4.perform_move(col, validate=True)
     except ValueError as e:
       print(e)
