@@ -126,9 +126,9 @@ def save_args(args):
   """
   base_dir = args["base_dir"]
   s = str(args)
-  s = ",\n".join(s.split(","))
+  s = "\n" + ",\n".join(s.split(","))
   filepath = base_dir / "info.txt"
-  with filepath.open("w") as f:
+  with filepath.open("a") as f:
     f.write(s)
 
 def log_stats(base_dir, round, stats):
