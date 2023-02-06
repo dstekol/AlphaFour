@@ -16,7 +16,7 @@ The project exists mainly for the sake of exploring and comparing various gamepl
 which is reasonably, but not overwhelmingly, complex - however, there is also something to be said for the 
 pleasure of playing against an algorithm that you actually understand. 
 The goal is **not** to produce the most perfect/unbeatable Connect Four algorithm possible, as this has already been achieved elsewhere by other (less interesting) techniques.
-One could argue that this code sits squarely at the intersection of research and revelry.
+This code sits squarely at the intersection of research and revelry.
 
 ## Game Implementation
 This repo contains a simple, no-frills implementation of the Connect Four game.
@@ -62,7 +62,7 @@ with the exception that, in the absence of an evaluation function, it uses a fix
 and performs full-depth simulations rather than using a value function as a short-circuit.
 The agent then chooses the action corresponding to the highest visit count.
 The MCTS search algorithm also forms the basis for the AlphaZero agent described below.
-When using several thousand rollouts (ex. 4000), the MCTSAgent is, in the experience of the author, quite difficult to beat. 
+When using several thousand rollouts (ex. 6000), the MCTSAgent is, in the experience of the author, quite difficult to beat. 
 I've done it a couple of times, but it hasn't been easy, and I'm not exactly a novice at Connect Four...
 
 ### AlphaZeroAgent
@@ -140,7 +140,7 @@ To play against a particular agent, users should run the `run_single_player.py` 
 
 
 ### Pitting Agents Against One Another (Zero Player Game?)
-To watch two agents play against each other, run `showdown.py` with the arguments `--agent1args` and `agent2args`, 
+To watch two agents play against each other, run `showdown.py` with the arguments `--agent1args` and `--agent2args`, 
 each of which should point to a file containing agent-specific command line arguments 
 (at the least, each file must contain an `--agent` argument specifying the agent type as one of "random", "alphabeta", "mcts", "alphazero")
 
