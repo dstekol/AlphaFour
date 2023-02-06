@@ -4,6 +4,13 @@ from run_single_player import initialize_agent
 from parse_utils import parse_args_showdown
 
 def showdown(player1, player2):
+  """
+  Plays a game between player1 and player2, printing out the board to the console after each move.
+
+  Args:
+  player1 (Union[RandomPlayer, AlphaBetaPlayer, MCTSPlayer, AlphaZeroPlayer]): first agent
+  player2 (Union[RandomPlayer, AlphaBetaPlayer, MCTSPlayer, AlphaZeroPlayer]): second agent
+  """
   cnct4 = ConnectFour()
   is_over = False
   playerA, playerB = player1, player2

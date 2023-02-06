@@ -12,12 +12,19 @@ from torch import zeros
 import random
 
 
-def play_single_player(agent, human_first):
+def play_single_player(player, human_first):
+  """
+  Plays a single-player game, pitting the user against the selected agent.
+
+  Args:
+  agent (Union[RandomPlayer, AlphaBetaPlayer, MCTSPlayer, AlphaZeroPlayer]): agent to play against
+  human_first (Boolean): whether the human goes first
+  """
   cnct4 = ConnectFour()
   is_over = False
   winner = 0
   if (not human_first):
-    cnct4.perform_move(agent.pick_move(cnct4))
+    cnct4.perform_move(player.pick_move(cnct4))
   cnct4.print_board()
   while(not is_over):
     try: 
@@ -27,7 +34,7 @@ def play_single_player(agent, human_first):
       cnct4.print_board()
       if (is_over):
         break
-      cnct4.perform_move(agent.pick_move(cnct4))
+      cnct4.perform_move(player.pick_move(cnct4))
       cnct4.print_board()
     except ValueError as e:
       print(e)
@@ -36,26 +43,35 @@ def play_single_player(agent, human_first):
   results = {1: "Player 1 Wins", 0: "Tie", -1: "Player 2 Wins"}
   print("Game Over: " + results[winner])
 
-def initialize_agent(args):
-  agent_type = AgentType(args.pop("agent"))
+def initialize_agent(agent_args):
+  """
+  Initializes and instance RandomPlayer, AlphaBetaPlayer, MCTSPlayer, or AlphaZeroPlayer according to provided command line arguments.
+
+  Args:
+  agent_args (Dict[String, Any]): dictionary of agent arguments
+
+  Return:
+  Union[RandomPlayer, AlphaBetaPlayer, MCTSPlayer, AlphaZeroPlayer]
+  """
+  agent_type = AgentType(agent_args.pop("agent"))
 
   if (agent_type == AgentType.RANDOM):
-    return RandomPlayer(**args)
+    return RandomPlayer(**agent_args)
   elif (agent_type == AgentType.ALPHABETA):
-    return AlphaBetaPlayer(**args)
+    return AlphaBetaPlayer(**agent_args)
   elif (agent_type == AgentType.MCTS):
-    gaussian = args.pop("gaussian")
-    return MCTSPlayer(args, gaussian)
+    gaussian = agent_args.pop("gaussian")
+    return MCTSPlayer(agent_args, gaussian)
   elif (agent_type == AgentType.ALPHAZERO):
-    use_cuda = args.pop("cuda")
-    checkpoint_path = args.pop("checkpoint")
-    max_buffer_size = args.pop("max_buffer_size")
-    max_wait_time = args.pop("max_wait_time")
+    use_cuda = agent_args.pop("cuda")
+    checkpoint_path = agent_args.pop("checkpoint")
+    max_buffer_size = agent_args.pop("max_buffer_size")
+    max_wait_time = agent_args.pop("max_wait_time")
 
     device = "cuda" if use_cuda else "cpu"
     model = AlphaZeroCNN.load_from_checkpoint(checkpoint_path).to(device)
     buffered_model = BufferedModelWrapper(model, max_buffer_size, max_wait_time)
-    return AlphaZeroPlayer(buffered_model, args)
+    return AlphaZeroPlayer(buffered_model, agent_args)
   raise ValueError(f"Cannot load agent of type {agent_type}")
 
 
@@ -65,9 +81,9 @@ if __name__ == "__main__":
   human_first = args.pop("human_first")
   if (human_first is None):
     human_first = bool(random.getrandbits(1))
-  agent = initialize_agent(args)
+  player = initialize_agent(args)
 
-  play_single_player(agent, human_first)
+  play_single_player(player, human_first)
 
-  if (isinstance(agent, AlphaZeroPlayer)):
-    agent.close()
+  if (isinstance(player, AlphaZeroPlayer)):
+    player.close()

@@ -85,6 +85,7 @@ class ConnectFour:
     """
     Performs move in specified column. 
     If validate set to True, checks whether the move is valid; otherwise omits validation for sake of speed.
+    Raises ValueError if invalid move detected.
 
     Args:
     col (Integer): column to add piece to (zero-indexed)

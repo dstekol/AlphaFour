@@ -12,7 +12,7 @@ class ResignCounter(object):
       Updates resignation statistics upon conclusion of a particular game.
 
       Args:
-      outcome: winner of game (1 for player 1, -1 for player 2, 0 if tie).
+      outcome (Integer): winner of game (1 for player 1, -1 for player 2, 0 if tie).
       resignations (Dict[Integer, Boolean]): mapping from player index (1 for player 1, -1 for player 2) to whether the corresponding player attempted to resign during the game.
       resign_allowed (Boolean): whether resignation was permitted (resignation is sometimes randomly disabled to accumulate false-positive statistics).
       """

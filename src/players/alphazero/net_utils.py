@@ -24,7 +24,7 @@ def create_datasets(game_trajectories, samples_per_game, flip_prob, validation_g
         If None, all data will be used. If in range (0,1), corresponding fraction of trajectories will be used. 
         If integer greater than or equal to 1, corresponding number of games per trajectory will be used.
   flip_prob (Float): Number in range (0,1) controlling the probability with which the random flip transformation is applied (ex. if flip_prob=0.5, half of samples will be flipped).
-  validation_games: The number of  to use for training from each game trajectory.
+  validation_games (Float): The number of  to use for training from each game trajectory.
         If None, all data will be used. If in range (0,1), corresponding fraction of trajectories will be used. 
         If integer greater than or equal to 1, corresponding number of games per trajectory will be used.
 
@@ -65,7 +65,7 @@ def init_model(net_args, device, source_model=None):
     "value_weight": Float in range [0,1] controlling strength of state-value loss relative to policy-value loss
       (0 means only policy-value is ussed, 1 means only state-value loss is used, 0.5 means state-value and policy-value loss are equally weighted).
   device (String): "cpu" or "cuda"
-  source_model (Optional[AlphaZeroCNN]): TODO
+  source_model (Optional[AlphaZeroCNN]): model to copy weights from
 
   Returns:
   model (AlphaZeroCNN)

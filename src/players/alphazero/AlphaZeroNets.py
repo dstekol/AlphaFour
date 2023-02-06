@@ -15,7 +15,7 @@ class AlphaZeroCNN(LightningModule):
     lr: learning rate
     l2_reg: Strength of L2 regularization
     state_value_weight: Weight of state-value loss relative to policy-value loss. 
-      0 means training loss is equal to state-value loss (policy-value loss has no impace), 1 means vice versa. 
+      0 means training loss is equal to state-value loss (policy-value loss has no impact), 1 means vice versa. 
       0.5 means state-value and policy-value losses are equally weighted.
     """
 
@@ -122,7 +122,7 @@ def architecture_dict(model, prefix):
   prefix (String): logging prefix (for grouping in Tensorboard).
 
   Returns:
-  Dictionary mapping layer name to output width.
+  Dict[String, Number]: mapping form layer name to output width.
   """
   widths = {}
   for name, child in model.named_children():

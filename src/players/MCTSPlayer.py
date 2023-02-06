@@ -10,7 +10,7 @@ class MCTSPlayer:
   def __init__(self, mcts_args, gaussian=True):
     """
     Args:
-    mcts_args (Dict[String, Any]): dictionary containing arguments for MCTS object instantiation.
+    mcts_args (Dict[String, Any]): dictionary containing command line arguments for MCTS object instantiation.
       Must contain: mcts_iters, discount, explore_coeff, temperature, dirichlet_coeff, dirichlet_alpha, num_threads
     gaussian (Boolean): whether to use gaussian/center-biased policy when terminal node reached. If False, will use uniform policy instead.
     """

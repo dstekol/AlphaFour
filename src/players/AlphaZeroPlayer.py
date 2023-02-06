@@ -12,7 +12,9 @@ def one_hot_state(game):
   game (ConnectFour)
 
   Returns:
-  np.ndarray: 3x6x7 array with dimensions (players, rows, columns)
+  np.ndarray: 3x6x7 array with dimensions (channels, rows, columns).
+    In the channels dimension, the first slice corresponds to player 1's pieces, 
+    the second slice is filled with the index of the current player (1 or -1), and the third slice corresponds to player 2's pieces
   """
   perspective_board = game.player * game.board
   player_ind_board = perspective_board + 1

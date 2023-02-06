@@ -99,10 +99,10 @@ class MCTS:
     Multithreading is used to avoid GPU bottleneck.
 
     Args:
-    game: ConnectFour object representing game state.
+    game (ConnectFour): game object representing game state.
     
     Returns:
-    Best current move, selected nondeterministically with probabilities proportional to temperature-scaled exponentiated visit counts.
+    Integer: Best current move, selected nondeterministically with probabilities proportional to temperature-scaled exponentiated visit counts.
     """
 
     self.global_sims_finished = 0
@@ -123,8 +123,8 @@ class MCTS:
     Replaces condition object (used as placeholder) in node dict with MCTSNode object
 
     Args:
-    state: bytestring representing current state, obtained via hashable_game_state()
-    node: MCTSNode containing computed stats for current state
+    state (bytes): bytestring representing current state, obtained via hashable_game_state()
+    node (MCTSNode): node containing computed stats for current state
     """
 
     condition = self.nodes[state]
@@ -139,7 +139,7 @@ class MCTS:
     Runs a single thread of PUCT/MCTS search until desired number of simulated rollouts is reached.
     
     Args:
-    game: ConnectFour object representing game state
+    game (ConnectFour): game object representing game state
     """
 
     orig_game = game
@@ -212,6 +212,14 @@ class MCTSNode:
   """
 
   def __init__(self, actions, priors, explore_coeff, total_actions):
+    """
+    Args:
+    actions (List[Integer]): list of valid game actions
+    priors (List[Float]): list of action priors (ex. scores from policy head)
+    explore_coeff (Float): exploration coefficient (higher values result in more exploration relative to exploitation)
+    total_actions (Integer): total number of possible actions
+    """
+
     self.priors = priors
     self.actions = actions
     self.explore_coeff = explore_coeff
@@ -278,7 +286,7 @@ class MCTSNode:
       If set to 0, the max-score action is chosen deterministically.
 
     Returns:
-    List of corresponding action scores (temperature-exponentiated visit counts)
+    List[Float]: list of corresponding action scores (temperature-exponentiated visit counts)
     """
 
     with self.lock:
@@ -319,7 +327,7 @@ class MCTSNode:
     dirichlet_alpha (Float): dirichlet distribution alpha parameter
 
     Returns:
-    Sampled action (Integer)
+    Integer: sampled action
     """
 
     with self.lock:

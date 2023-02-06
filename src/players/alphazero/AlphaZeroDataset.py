@@ -12,10 +12,10 @@ class AlphaZeroDataset(Dataset):
       """
       Args:
       game_trajectories (List[Trajectory]): List of self-play trajectories.
-      samples_per_game: The number of state-outcome pairs to use for training from each game trajectory. 
+      samples_per_game (Optional[Float]): The number of state-outcome pairs to use for training from each game trajectory. 
         If None, all data will be used. If in range (0,1), corresponding fraction of trajectories will be used. 
         If integer greater than or equal to 1, corresponding number of games per trajectory will be used.
-      flip_prob: The probability with which the random flip transformation is applied (ex. if flip_prob=0.5, half of samples will be flipped).
+      flip_prob (Optional[Float]): Float in range [0,1]. The probability with which the random flip transformation is applied (ex. if flip_prob=0.5, half of samples will be flipped).
       """
       self.data = []
       self.flip_prob = flip_prob
@@ -29,7 +29,7 @@ class AlphaZeroDataset(Dataset):
       Returns appropriate number of state-outcome pairs to sample from trajectory
 
       Args:
-      samples_per_game: The number of state-outcome pairs to use for training from each game trajectory. 
+      samples_per_game (Float): The number of state-outcome pairs to use for training from each game trajectory. 
         If None, all data will be used. If in range (0,1), corresponding fraction of trajectories will be used. 
         If integer greater than or equal to 1, corresponding number of games per trajectory will be used.
       trajectory (Trajectory): Trajectory object containing list of (state, target_output) tuples.
@@ -50,7 +50,7 @@ class AlphaZeroDataset(Dataset):
         with probability self.flip_prob
 
       Args:
-      item: tuple of form (state, target_output) to be potentially flipped.
+      item Tuple[torch.tensor, torch.tensor]: tuple of form (state, target_output) to be potentially flipped.
       """
 
       if (random.random() < self.flip_prob):

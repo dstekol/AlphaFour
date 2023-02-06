@@ -32,11 +32,13 @@ class AlphaBetaScorer:
   def score(self, game, winner, depth):
     """
     Returns the depth-discounted evaluation score of the given game. 
-    Positive when player 1 winning, negative when player 1 winning.
+    Positive when player 1 winning, negative when player 2 winning.
     Score = 1 means player 1 guaranteed to win; Score = -1 means player 2 guaranteed to win.
 
     Args:
     game (ConnectFour): the game to evaluate
+    winner (Integer): 1 if player 1 wins, -1 if player 2 wins, 0 if tie
+    depth (Integer): number of moves until game ends
 
     Returns:
     Float: score

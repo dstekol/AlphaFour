@@ -21,13 +21,13 @@ tqdm_slider = functools.partial(tqdm, leave=True, position=0)
 
 def init_players(buffered_model_a, buffered_model_b, game_args):
   """
-  Initializes two AlphaZero player objects with GPU buffers corresponding to buffer_a and buffer_b,
+  Initializes two AlphaZero player objects with GPU buffers corresponding to buffered_model_a and buffered_model_b,
   and gameplay parameters initialized according to values in game_args
 
   Args:
-  buffered_model_a (EvalBuffer): buffer object corresponding to player a (for queueing game states for evaluation by neural network, used in place of actual network)
-  buffered_model_b (EvalBuffer): buffer object corresponding to player b (for queueing game states for evaluation by neural network, used in place of actual network)
-    (can be same as buffer_a if using same underlying model)
+  buffered_model_a (BufferedModelWrapper): buffer object corresponding to player a (for queueing game states for evaluation by neural network, used in place of actual network)
+  buffered_model_b (BufferedModelWrapper): buffer object corresponding to player b (for queueing game states for evaluation by neural network, used in place of actual network)
+    (can be same as buffered_model_a if using same underlying model)
   game_args (Dict[String, Any]): dictionary containing subset of command line arguments, with the following items:
     explore_coeff, mcts_iters, temperature, dirichlet_coeff, dirichlet_alpha, discount, num_threads
 
@@ -44,21 +44,21 @@ def init_players(buffered_model_a, buffered_model_b, game_args):
 
 def play_game(buffered_model_a, buffered_model_b, game_args, save_trajectory, resign_counter):
   """
-  Plays a game between player A (corresponding to buffer_a) and player B (corresponding to buffer_b), 
+  Plays a game between player A (corresponding to buffered_model_a) and player B (corresponding to buffered_model_b), 
   and returns whether player A won (and optionally the game trajectory). 
   Initializes temperature to game_args["temperature"], then drops the temperature to game_args["drop_temperature"] at timestep game_args["temp_drop_step"]
 
   Args:
-  buffered_model_a (BufferedModelWrapper): buffer object corresponding to player a (for queueing game states for evaluation by neural network, used in place of actual network)
-  buffered_model_b (BufferedModelWrapper): buffer object corresponding to player b (for queueing game states for evaluation by neural network, used in place of actual network)
-    (can be same as buffer_a if using same underlying model)
+  buffered_model_a (BufferedModelWrapper): buffered model corresponding to player a
+  buffered_model_b (BufferedModelWrapper): buffered model corresponding to player b
+    (can be same as buffered_model_a if using same underlying model)
   game_args (Dict[String, Any]): dictionary containing subset of command line arguments, with the following items:
     explore_coeff, mcts_iters, temperature, dirichlet_coeff, dirichlet_alpha, discount, num_threads
   save_trajectory (Boolean): whether or not to return the game trajectory (saved as a list of state-outcome tuples)
   resign_counter (ResignCounter): ResignCounter object for tracking resignation statistics
 
   Returns:
-  player_a_won (Boolean): Whether or not the player corresponding to buffer_a won the game. 
+  player_a_won (Boolean): Whether or not the player corresponding to buffered_model_a won the game. 
     1 if player A won, -1 if player B won, 0 if tie.
   trajectory (List[Tuple[torch.tensor, torch.tensor]]): List of state-outcome tuples representing the game trajectory.
     First element in each tuple is one-hot representation of game state. 
@@ -126,10 +126,7 @@ def play_game(buffered_model_a, buffered_model_b, game_args, save_trajectory, re
 
   return player_a_won, trajectory
 
-
-
-
-def eval_new_model(target_buffer, opponent_buffer, game_args, num_eval_games):
+def eval_new_model(target_buffered_model, opponent_buffered_model, game_args, num_eval_games):
   """
   Plays a number of evaluation games (dictated by num_eval_games) pitting the target model 
   (corresponding to target_buffer) against the opponent/baseline buffer (corresponding to opponent_buffer)
@@ -138,26 +135,26 @@ def eval_new_model(target_buffer, opponent_buffer, game_args, num_eval_games):
   (dirichlet_coeff is set to 0) regardless of values in game_args dictionary.
 
   Args:
-  target_buffer (EvalBuffer): buffer object corresponding to the target model to be evaluated (for queueing game states for evaluation by neural network, used in place of actual network)
-  opponent_buffer (EvalBuffer): buffer object corresponding to the opponent/baseline model, which is the previous best model (for queueing game states for evaluation by neural network, used in place of actual network)
-    (can be same as buffer_a if using same underlying model)
+  target_buffered_model (BufferedModelWrapper): buffered model corresponding to the target model to be evaluated
+  opponent_buffered_model (BufferedModelWrapper): buffered model corresponding to the opponent/baseline model, which is the previous best model
+    (can be same as buffered_model_a if using same underlying model)
   game_args (Dict[String, Any]): dictionary containing subset of command line arguments, with the following items:
     explore_coeff, mcts_iters, temperature, dirichlet_coeff, dirichlet_alpha, discount, num_threads
-  num_eval_games: The number of evaluation games to play
+  num_eval_games (Integer): The number of evaluation games to play
 
   Returns:
   frac_wins (Float): Number in range [0,1] representing the fraction of the evaluation games that the target model won
   """
-  target_buffer.model.eval()
-  opponent_buffer.model.eval()
+  target_buffered_model.model.eval()
+  opponent_buffered_model.model.eval()
   win_counter = 0
   game_args = game_args.copy()
   game_args["temperature"] = 0
   game_args["temp_drop_step"] = None
   game_args["dirichlet_coeff"] = 0
   for i in tqdm_slider(range(num_eval_games), desc="eval games"):
-    outcome, _ = play_game(target_buffer, 
-                           opponent_buffer,
+    outcome, _ = play_game(target_buffered_model, 
+                           opponent_buffered_model,
                            game_args, 
                            save_trajectory=False, 
                            resign_counter=None)
@@ -169,6 +166,11 @@ def eval_new_model(target_buffer, opponent_buffer, game_args, num_eval_games):
   return frac_wins
 
 def train(args):
+  """
+  Runs AlphaZero training: 
+  alternates between performing self-play games, retraining neural net on game trajectories, and evaluating new model against previous model.
+  """
+
   init_dirs(args["base_dir"])
   save_args(args)
   device = "cuda" if torch.cuda.is_available() and args["cuda"] else "cpu"
@@ -182,6 +184,7 @@ def train(args):
   else:
     print(f"Pitting against version: {name}")
 
+  # retrieve saved game trajectories (if restoring from checkpoint)
   trajectories, init_round_num = load_game_trajectories(args["base_dir"])
   if (len(trajectories) == 0):
     print("No saved trajectories")
@@ -196,21 +199,19 @@ def train(args):
     # perform self-play games and collect play data
     best_model.eval()
     
-    model_buffer = BufferedModelWrapper(best_model, args["max_buffer_size"], args["max_wait_time"])
+    buffered_model = BufferedModelWrapper(best_model, args["max_buffer_size"], args["max_wait_time"])
     for game_ind in tqdm_slider(range(args["games_per_round"]), desc="training games"):
-      outcome, trajectory =  play_game(model_buffer, 
-                                        model_buffer, 
+      outcome, trajectory =  play_game(buffered_model, 
+                                        buffered_model, 
                                         args["game_args"], 
                                         save_trajectory=True, 
                                         resign_counter=resign_counter)
       trajectories.append(trajectory)
       if (len(trajectories) > args["max_queue_len"]):
         trajectories.pop(0)
-    model_buffer.close()
+    buffered_model.close()
 
-    #if (args["games_output_file"] is not None)
     save_game_trajectories(args["base_dir"], trajectories, round_ind) 
-      #pkl.dump(trajectories, open(args["games_output_file"], "wb"))
     
     avg_moves = sum([len(traj) for traj in trajectories[-args["games_per_round"]:]]) / args["games_per_round"]
     print(f"Avg Moves: {avg_moves:.3f}")
@@ -218,10 +219,6 @@ def train(args):
     
 
     # train policy and value networks to predict action and state scores respectively
-    #train_data, val_data = create_datasets(game_trajectories, 
-    #                                       args["samples_per_game"], 
-    #                                       args["flip_prob"], 
-    #                                       args["validation_games"])
     dataset_arg_names = ["samples_per_game", "flip_prob", "validation_games"]
     dataset_args = copy_args(args, dataset_arg_names)
     target_model, save_checkpoint_handle = train_model_multi_version(best_model, 
@@ -233,15 +230,19 @@ def train(args):
                                          device)
 
     # evaluate newly trained model against previous best model
-    target_buffer = BufferedModelWrapper(target_model, args["max_buffer_size"], args["max_wait_time"])
-    opponent_buffer = BufferedModelWrapper(best_model, args["max_buffer_size"], args["max_wait_time"])
-    frac_wins = eval_new_model(target_buffer,
-                       opponent_buffer, 
+    buffered_target_model = BufferedModelWrapper(target_model, args["max_buffer_size"], args["max_wait_time"])
+    buffered_opponent_model = BufferedModelWrapper(best_model, args["max_buffer_size"], args["max_wait_time"])
+    frac_wins = eval_new_model(buffered_target_model,
+                       buffered_opponent_model, 
                        args["game_args"], 
                        args["eval_games"])
+    
+    # close buffered models
+    buffered_target_model.close()
+    buffered_opponent_model.close()
+
+    # decide whether to keep or discard new model
     keep_new_model = frac_wins >= args["win_threshold"]
-    target_buffer.close()
-    opponent_buffer.close()
     if (keep_new_model):
       print("\nAccepting new model")
       save_model(args["base_dir"], save_checkpoint_handle, round_ind)
@@ -249,6 +250,7 @@ def train(args):
     else:
       print("\nRejecting new model")
     
+    # log training stats
     stats = {"Frac wins": frac_wins, "Avg moves": avg_moves, "Accepted": keep_new_model}
     stats.update(resign_counter.get_stats())
     log_stats(args["base_dir"], round_ind, stats)
