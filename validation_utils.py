@@ -14,8 +14,8 @@ def positive_int(arg):
     i = int(arg)
     if (i <= 0):
       raise ValueError()
-  except ValueError:
-    argparse.ArgumentTypeError("Must be a positive integer")
+  except Exception as e:
+    raise argparse.ArgumentTypeError("Must be a positive integer")
   return i
 
 def nonnegative_int(arg):
@@ -23,8 +23,8 @@ def nonnegative_int(arg):
     i = int(arg)
     if (i < 0):
       raise ValueError()
-  except ValueError:
-    argparse.ArgumentTypeError("Must be a positive integer")
+  except Exception as e:
+    raise argparse.ArgumentTypeError("Must be a positive integer")
   return i
 
 def constrained_float(arg):
@@ -32,14 +32,21 @@ def constrained_float(arg):
     f = float(arg)
     if (f < 0 or f > 1):
       raise ValueError()
-  except ValueError:
-    argparse.ArgumentTypeError("Must be a floating point number in range [0,1]")
+  except Exception as e:
+    raise argparse.ArgumentTypeError("Must be a floating point number in range [0,1]")
   return f
 
 def path_arg(arg):
   return Path(arg)
 
+def str_to_bool(arg):
+  if (str(arg).upper() == "FALSE"):
+    return False
+  elif (str(arg).upper() == "TRUE"):
+    return True
+  raise argparse.ArgumentTypeError("Must be either True or False")
+
 def valid_opponent(arg):
   if (arg not in [e.value for e in AgentType]):
-    argparse.ArgumentTypeError(f"Must be one of {str([e.value for e in AgentType])}")
+    raise argparse.ArgumentTypeError(f"Must be one of {str([e.value for e in AgentType])}")
   return arg

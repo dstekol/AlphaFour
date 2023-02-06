@@ -1,10 +1,5 @@
 import argparse
 from validation_utils import *
-from pathlib import Path
-from src.players.RandomPlayer import RandomPlayer
-from src.players.AlphaBetaPlayer import AlphaBetaPlayer
-from src.players.MCTSPlayer import MCTSPlayer
-from src.players.AlphaZeroPlayer import AlphaZeroPlayer
 
 def copy_args(args, arg_names):
   return {arg_name: args[arg_name] for arg_name in arg_names}
@@ -12,7 +7,7 @@ def copy_args(args, arg_names):
 def parse_args_trainer():
   parser = argparse.ArgumentParser()
   parser.add_argument("--seed", default=42, type=int, help="Random seed for reproducibility")
-  parser.add_argument("--cuda", default=True, type=bool, help="Whether to use CUDA acceleration")
+  parser.add_argument("--cuda", default=True, type=str_to_bool, help="Whether to use CUDA acceleration")
   parser.add_argument("--rounds", default=20, type=positive_int, help="Number of policy improvement rounds")
   parser.add_argument("--games-per-round", default=2000, type=positive_int, help="Number of self-play games to execute per policy improvement round")
   parser.add_argument("--eval-games", default=100, type=positive_int, help="Number of evaluation games to play between newly trained model and previous best model")
@@ -49,56 +44,14 @@ def parse_args_trainer():
   game_args.add_argument("--resign-forbid-prob", default=0.1, type=constrained_float, help="Probability that resignation will not be allowed (used in training to prevent false positives)")
 
   arg_groups = [net_args, game_args]
-  #return to_heirarchical_dict(parser.parse_args(), arg_groups)
-  return {"seed": 42,
-          "cuda": True,
-          "rounds": 5,
-          "games_per_round": 20,
-          "eval_games": 10,
-          "win_threshold": 0.55,
-          "base_dir": Path("testrun1"),
-          "flip_prob": 0.5,
-          "samples_per_game": None,
-          "validation_games": 0.10,
-          "max_queue_len": 6000,
-          "max_buffer_size": 20,
-          "max_wait_time": 0.05,
-          "net_args": {
-            "patience": None,
-            "train_attempts": 4,
-            "max_epochs": 15,
-            "min_epochs": 5,
-            "batch_size": 100,
-            "state_value_weight": 0.5,
-            "lr": 1e-3,
-            "l2_reg": 1e-5
-            },
-          "game_args": {
-            "num_threads": 45,
-            "discount": 0.96,
-            "mcts_iters": 100,
-            "explore_coeff": 1,
-            "temperature": 0.8,
-            "drop_temperature": 0.05,
-            "temp_drop_step": 7,
-            "resign_threshold": -0.85,
-            "resign_forbid_prob": 0.1,
-            "dirichlet_coeff": 0.02,
-            "dirichlet_alpha": 0.3
-            }
-    }
-
-class LoadFromFile (argparse.Action):
-    def __call__ (self, parser, namespace, values, option_string = None):
-        with values as f:
-            parser.parse_args(f.read().split(), namespace)
+  return _to_heirarchical_dict(parser.parse_args(), arg_groups)
 
 def get_single_player_parser():
   parser = argparse.ArgumentParser()
   parser.add_argument("--agent", required=True, type=valid_opponent, help="Opponent agent to play against. One of: random, alphabeta, mcts, alphazero")
-  parser.add_argument("--human-first", default=None, type=bool, help="Whether the human should go first. If None, first player will be chosen randomly")
+  parser.add_argument("--human-first", default=None, type=str_to_bool, help="Whether the human should go first. If None, first player will be chosen randomly")
 
-  parser.add_argument("--gaussian", default=True, type=bool, help="Whether to use a Gaussian prior when choosing moves (thus biasing moves toward the center, which is generally slightly better). If set to False, a uniform distribution will be used instead.")
+  parser.add_argument("--gaussian", default=True, type=str_to_bool, help="Whether to use a Gaussian prior when choosing moves (thus biasing moves toward the center, which is generally slightly better). If set to False, a uniform distribution will be used instead.")
 
   parser.add_argument("--quick-search-depth", default=4, type=positive_int, help="Maximum tree depth when performing a quick-search (checking for obvious moves at the start of each turn)")
   parser.add_argument("--max-depth", default=7, type=positive_int, help="Maximum tree depth to descend to before applying heuristic evaluation functions")
@@ -111,7 +64,7 @@ def get_single_player_parser():
   parser.add_argument("--dirichlet-coeff", default=0, type=constrained_float, help="Dirichlet noise coefficient (added to action scores). If 0, no dirichlet noise will be added to MCTS scores; if 1, only dirichlet noise will be used.")
   parser.add_argument("--dirichlet-alpha", default=0.3, type=float, help="Dirichlet noise distribution parameter")
   
-  parser.add_argument("--cuda", default=True, type=bool, help="Whether to use CUDA acceleration")
+  parser.add_argument("--cuda", default=True, type=str_to_bool, help="Whether to use CUDA acceleration")
   parser.add_argument("--checkpoint", type=path_arg, help="Path to saved model checkpoint")
   parser.add_argument("--max-buffer-size", default=20, type=positive_int, help="Maximum GPU buffer size (should be at most number of threads)")
   parser.add_argument("--max-wait-time", default=0.05, type=float, help="Maximum amount of time  (in milliseconds) to wait before flushing GPU buffer")
@@ -144,8 +97,7 @@ def get_agent_file_args(path):
     try:
       args = parser.parse_args(arg_text)
     except:
-      raise argparse.ArgumentTypeError(f"Unable to parse argument file {str(path)}. \
-      Try running these arguments with run_single_player.py to determine which argument is invalid.")
+      raise argparse.ArgumentTypeError(f"Unable to parse argument file {str(path)}")
   return _to_heirarchical_dict(args, [])
 
 def parse_args_showdown():
@@ -157,9 +109,6 @@ def parse_args_showdown():
   agent_1_args = filter_player_args(get_agent_file_args(args.agent1args))
   agent_2_args = filter_player_args(get_agent_file_args(args.agent2args))
   return {"agent1args": agent_1_args, "agent2args": agent_2_args}
-
-
-
 
 def _to_heirarchical_dict(args, arg_groups):
   args_dict = vars(args)

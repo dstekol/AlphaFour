@@ -393,3 +393,6 @@ healthchecksdb
 /filtering.py
 /trained_v5_undiscounted.ckpt
 /sl_resnet_undisc.ckpt
+/testparse
+/testparse2
+/testparse3
