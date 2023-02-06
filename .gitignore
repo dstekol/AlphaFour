@@ -368,7 +368,6 @@ healthchecksdb
 /alphazero_logs_v7
 /checkpoints_v6
 /checkpoints_v7
-*.ckpt
 /improve
 /version_*
 /cnct4_8.pkl
@@ -392,3 +391,5 @@ healthchecksdb
 /preprocess.py
 /multi_train.py
 /filtering.py
+/trained_v5_undiscounted.ckpt
+/sl_resnet_undisc.ckpt

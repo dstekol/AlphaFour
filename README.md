@@ -88,7 +88,7 @@ a low temperature biases the agent toward the highest-scoring action,
 whereas a high temperature increases the probability of low-scoring actions being selected.
  - The MCTS scores are further perturbed via a small amount of Dirichlet noise.
 
-A trained checkpoint is included with the code. Due to computational resource limitations, the trained model does not achieve superhuman performance, but it is reasonably good against a casual player.
+A trained checkpoint (`alphazero_cnn.ckpt`) is included with the code. Due to computational resource limitations, the trained model does not achieve superhuman performance, but it is reasonably good against a casual player.
 
 
 ## Running the code
