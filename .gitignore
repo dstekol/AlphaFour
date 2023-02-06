@@ -382,3 +382,13 @@ healthchecksdb
 /pro_train_v1
 *.pkl
 /testrun1
+/test_threads.py
+/train_experiment.py
+/mcts_args.txt
+/experiment.py
+/classifying.py
+/alphabeta_args.txt
+/adversarial.py
+/preprocess.py
+/multi_train.py
+/filtering.py
