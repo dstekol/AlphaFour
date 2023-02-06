@@ -1,6 +1,13 @@
 import argparse
 from pathlib import Path
 import os
+from enum import Enum
+
+class AgentType(Enum):
+  RANDOM = "random"
+  ALPHABETA = "alphabeta"
+  MCTS = "mcts"
+  ALPHAZERO = "alphazero"
 
 def positive_int(arg):
   try:
@@ -29,10 +36,10 @@ def constrained_float(arg):
     argparse.ArgumentTypeError("Must be a floating point number in range [0,1]")
   return f
 
-def valid_checkpoint_dir(arg):
-  if (not os.path.isdir(arg)):
-    argparse.ArgumentTypeError("Must be a valid directory")
+def path_arg(arg):
   return Path(arg)
 
 def valid_opponent(arg):
-  return arg in ["Random", "AlphaBeta", "MCTS", "AlphaZero"]
+  if (arg not in [e.value for e in AgentType]):
+    argparse.ArgumentTypeError(f"Must be one of {str([e.value for e in AgentType])}")
+  return arg
