@@ -25,8 +25,8 @@ def init_players(buffered_model_a, buffered_model_b, game_args):
   and gameplay parameters initialized according to values in game_args
 
   Args:
-  buffered_model_a (BufferedModelWrapper): buffer object corresponding to player a (for queueing game states for evaluation by neural network, used in place of actual network)
-  buffered_model_b (BufferedModelWrapper): buffer object corresponding to player b (for queueing game states for evaluation by neural network, used in place of actual network)
+  buffered_model_a (BufferedModelWrapper): buffer object corresponding to player a
+  buffered_model_b (BufferedModelWrapper): buffer object corresponding to player b
     (can be same as buffered_model_a if using same underlying model)
   game_args (Dict[String, Any]): dictionary containing subset of command line arguments, with the following items:
     explore_coeff, mcts_iters, temperature, dirichlet_coeff, dirichlet_alpha, discount, num_threads
