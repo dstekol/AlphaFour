@@ -201,16 +201,15 @@ game_over_tests = [
 ]
 
 cnct4 = ConnectFour()
-#test_method = lambda: cnct4.game_over_optimized()
+
 test_method = lambda: cnct4.game_over()
-#test_method2 = lambda: cnct4.game_over_conv()
 expanded_game_over_tests = game_over_tests[:]
 expanded_game_over_tests += [{"result": (test["result"][0], -test["result"][1]), "board": np.array(test["board"])*-1, "name": test["name"] + " negated", "col": test["col"], "player": -1*test["player"], "level": test["level"] if "level" in test else None} for test in game_over_tests]
+
 for item in expanded_game_over_tests:
   item["board"] = np.array(item["board"])
 run_tests(expanded_game_over_tests, cnct4, test_method)
+
 t = timeit.timeit(lambda: run_tests(expanded_game_over_tests, cnct4, test_method, do_print=False), number=5000)
 print(t)
-#t = timeit.timeit(lambda: run_tests(expanded_game_over_tests, cnct4, test_method2, do_print=False), number=1000)
-#print(t)
 
